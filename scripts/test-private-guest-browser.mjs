@@ -8,7 +8,7 @@ import { runInNewContext } from 'node:vm';
 import JSZip from 'jszip';
 const require=createRequire(resolve('../../clap-cinematic-quest/package.json'));
 const { chromium }=require('playwright');
-const players=new Map();const events=[];let sequence=0,roomMetadata={};
+const players=new Map();const events=[];let sequence=0,roomMetadata={};let lostOffer=false,lostReady=false;
 function add(id,role,name){players.set(id,{id,role,name,connectionId:'sdk-'+id,metadata:{},color:'#123456',syncView:false});}
 add('host','GM','MJ');add('guest-old','PLAYER','Invité');
 function parentPage(){
@@ -58,7 +58,7 @@ const server=createServer(async(req,res)=>{try{
    case 'OBR_ROOM_GET_METADATA':value={metadata:roomMetadata};break;
    case 'OBR_PLAYER_SET_METADATA':Object.assign(self.metadata,data.update);break;
    case 'OBR_ROOM_SET_METADATA':Object.assign(roomMetadata,data.update);break;
-   case 'OBR_BROADCAST_SEND_MESSAGE':if(data.options?.destination!=='LOCAL')events.push({seq:++sequence,player,connectionId:self.connectionId,channel:data.channel,data:data.data});break;
+   case 'OBR_BROADCAST_SEND_MESSAGE':if(player==='guest-old'&&data.channel==='fr.clap.owlbear/v2/signal'&&data.data.index===0&&!lostOffer){lostOffer=true;break;}if(player==='guest-old'&&data.channel==='fr.clap.owlbear/v3/data'&&data.data.type==='ready'&&!lostReady){lostReady=true;break;}if(data.options?.destination!=='LOCAL')events.push({seq:++sequence,player,connectionId:self.connectionId,channel:data.channel,data:data.data});break;
   }
   res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));return;
  }
@@ -121,5 +121,6 @@ try{
  await returning.frameLocator('#toast').getByText('Réussite · 4',{exact:true}).waitFor({timeout:15000});
  await returning.screenshot({path:'release/qa/private-guest-dice.png'});
  assert.ok(!JSON.stringify(events.filter(e=>e.channel==='fr.clap.owlbear/v3/data')).includes('SECRET_ROOM_PROGRESS'),'Private transport remains encrypted');
+ assert.ok(lostOffer&&lostReady,'Lost opening packets must be recovered');
  assert.deepEqual(errors,[]);console.log('Cross-browser native QA OK: isolated storage, no direct WebRTC, real SDK signaling, encrypted chat and hero assignment, new guest identity recovered only after GM approval, animated dice with panel closed.');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

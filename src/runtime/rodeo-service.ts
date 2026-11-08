@@ -55,6 +55,7 @@ export class OwlbearRoomService {
   paused = false;
   linked = false;
   notice = "";
+  diagnostics={sent:0,received:0,accepted:0,lastReject:'',lastError:'',participants:[] as {role:string;version:string;partyConnection:boolean;sdkConnection:boolean}[]};
   readonly code: string;
   private sequence = 0;
   private signals: RoomSignal[] = [];
@@ -70,6 +71,8 @@ export class OwlbearRoomService {
       updated: number;
     }
   >();
+  private outgoing = new Map<string,{connection:string;packets:any[];timer?:ReturnType<typeof setTimeout>;attempts:number}>();
+  private acknowledged = new Set<string>();
   private dispose?: () => void;
   private localInstance = "";
   private receiving = Promise.resolve();
@@ -83,14 +86,16 @@ export class OwlbearRoomService {
     this.dispose = this.port.onSignal((event) => {
       this.receiving = this.receiving
         .then(() => this.receive(event))
-        .catch(() => {});
+        .catch(error => { this.diagnostics.lastError=error instanceof Error?error.message:String(error); });
     });
+    const own=await this.port.self();
     await this.port.setPlayerMetadata({
-      [PLAYER_KEY]: { active: false, instance: "", transport: "native-v1", version: clientVersion },
+      [PLAYER_KEY]: { sdkConnectionId: own.connectionId, active: false, instance: "", transport: "native-v1", version: clientVersion },
     });
   }
   stop() {
     this.dispose?.();
+    for(const job of this.outgoing.values())clearTimeout(job.timer);this.outgoing.clear();
   }
   async descriptor(): Promise<Descriptor | undefined> {
     const players = await this.players();
@@ -233,7 +238,7 @@ export class OwlbearRoomService {
         this.error("La partie CLAP! est complète (16 participants).", 409);
       this.paused = false;
       await this.port.setPlayerMetadata({
-        [PLAYER_KEY]: { active: true, instance: this.localInstance, transport: "native-v1", version: clientVersion },
+        [PLAYER_KEY]: { sdkConnectionId: self.connectionId, active: true, instance: this.localInstance, transport: "native-v1", version: clientVersion },
       });
       return {
         room: this.code,
@@ -254,10 +259,11 @@ export class OwlbearRoomService {
       if (this.localInstance !== body.instance) {
         this.localInstance = body.instance;
         await this.port.setPlayerMetadata({
-          [PLAYER_KEY]: { active: true, instance: body.instance, transport: "native-v1", version: clientVersion },
+          [PLAYER_KEY]: { sdkConnectionId: self.connectionId, active: true, instance: body.instance, transport: "native-v1", version: clientVersion },
         });
       }
       const party = await this.players();
+      this.diagnostics.participants=party.filter(player=>(player.metadata[PLAYER_KEY] as any)?.active).map(player=>({role:player.role,version:String((player.metadata[PLAYER_KEY] as any)?.version||'inconnue'),partyConnection:typeof player.connectionId==='string',sdkConnection:typeof (player.metadata[PLAYER_KEY] as any)?.sdkConnectionId==='string'}));
       const outdated = party.find(player => player.id !== self.id && (player.metadata[PLAYER_KEY] as any)?.active && (player.metadata[PLAYER_KEY] as any)?.transport !== 'native-v1');
       const notice = outdated ? 'Le participant « '+outdated.name.slice(0,40)+' » utilise une ancienne version de CLAP!. Rechargez l’extension chez tous les participants.' : '';
       if (notice !== this.notice) { this.notice=notice;if(typeof window!=='undefined')window.dispatchEvent(new Event('clap-integration-state')); }
@@ -305,8 +311,9 @@ export class OwlbearRoomService {
       });
       const id = crypto.randomUUID(),
         count = Math.ceil(json.length / 1800);
+      const packets:any[]=[];
       for (let index = 0; index < count; index++)
-        await this.port.send(SIGNAL, {
+        packets.push({
           id,
           target: body.target,
           instance: body.instance,
@@ -314,13 +321,23 @@ export class OwlbearRoomService {
           index,
           text: json.slice(index * 1800, (index + 1) * 1800),
         });
+      const job={connection:(target.metadata[PLAYER_KEY] as any)?.sdkConnectionId || target.connectionId,packets,attempts:0} as {connection:string;packets:any[];attempts:number;timer?:ReturnType<typeof setTimeout>};
+      this.outgoing.set(id,job);
+      const transmit=async()=>{
+        if(!this.outgoing.has(id))return;
+        if(++job.attempts>6){this.outgoing.delete(id);this.diagnostics.lastError='La négociation de connexion ne reçoit aucune confirmation.';return;}
+        try {this.diagnostics.sent+=packets.length;for(const packet of packets)await this.port.send(SIGNAL,packet);}
+        catch(error){this.diagnostics.lastError=error instanceof Error?error.message:String(error);}
+        if(this.outgoing.has(id))job.timer=setTimeout(()=>{void transmit();},2500);
+      };
+      await transmit();
       return { ok: true };
     }
     if (path === "/leave") {
       this.paused = true;
       if (host) await this.save({ ...d, closed: true });
       await this.port.setPlayerMetadata({
-        [PLAYER_KEY]: { active: false, instance: this.localInstance, transport: "native-v1", version: clientVersion },
+        [PLAYER_KEY]: { sdkConnectionId: self.connectionId, active: false, instance: this.localInstance, transport: "native-v1", version: clientVersion },
       });
       return { ok: true };
     }
@@ -368,11 +385,16 @@ export class OwlbearRoomService {
     this.error("Action de salle inconnue.", 404);
   };
   private async receive(event: { connectionId: string; data: unknown }) {
+    this.diagnostics.received++;
     const packet = event.data as any;
     if (!packet || typeof packet !== "object") return;
     const self = await this.port.self();
-    if (packet.target !== self.id || packet.instance !== this.localInstance)
+    if (packet.target !== self.id || packet.instance !== this.localInstance) { this.diagnostics.lastReject=packet.target!==self.id?'autre destinataire':'instance locale différente';return; }
+    if(typeof packet.ack==='string') {
+      const job=this.outgoing.get(packet.ack);
+      if(job && job.connection===event.connectionId){clearTimeout(job.timer);this.outgoing.delete(packet.ack);}
       return;
+    }
     if (
       typeof packet.id !== "string" ||
       packet.id.length > 100 ||
@@ -384,9 +406,8 @@ export class OwlbearRoomService {
       packet.text.length > 1800
     )
       return;
-    const sender = (await this.port.others()).find(
-      (p) => p.connectionId === event.connectionId,
-    );
+    const candidates = (await this.port.others()).filter(p => p.connectionId === event.connectionId || (p.metadata[PLAYER_KEY] as any)?.sdkConnectionId === event.connectionId);
+    const sender = candidates.length === 1 ? candidates[0] : undefined;
     const d = await this.descriptor();
     if (d?.site) return;
     if (
@@ -396,7 +417,10 @@ export class OwlbearRoomService {
       d.blocked.includes(sender.id) ||
       (self.id !== d.hostId && sender.id !== d.hostId)
     )
-      return;
+      {this.diagnostics.lastReject=!sender?'connexion émetteur inconnue':!d?'MJ introuvable':'émetteur ou salle non autorisé';return;}
+    if(this.acknowledged.has(event.connectionId+':'+packet.id)){
+      await this.port.send(SIGNAL,{ack:packet.id,target:sender.id,instance:(sender.metadata[PLAYER_KEY] as Presence)?.instance});return;
+    }
     for (const [id, chunk] of this.chunks)
       if (Date.now() - chunk.updated > 30000) this.chunks.delete(id);
     const key = event.connectionId + ":" + packet.id;
@@ -426,18 +450,20 @@ export class OwlbearRoomService {
       typeof data.connection !== "string" ||
       data.connection.length > 100 ||
       typeof data.senderInstance !== "string" ||
-      data.senderInstance !==
-        (sender.metadata[PLAYER_KEY] as Presence | undefined)?.instance ||
       !["offer", "answer"].includes(data.description?.type) ||
       typeof data.description.sdp !== "string" ||
       data.description.sdp.length > 100000
     )
       return;
+    if(data.senderInstance !== (sender.metadata[PLAYER_KEY] as Presence | undefined)?.instance){this.diagnostics.lastReject='présence distante non actualisée';return;}
     if (
       (self.id === d.hostId && data.description.type !== "offer") ||
       (self.id !== d.hostId && data.description.type !== "answer")
     )
       return;
+    this.acknowledged.add(event.connectionId+':'+packet.id);if(this.acknowledged.size>100)this.acknowledged.delete(this.acknowledged.values().next().value!);
+    await this.port.send(SIGNAL,{ack:packet.id,target:sender.id,instance:data.senderInstance});
+    this.diagnostics.accepted++;
     this.signals = [
       ...this.signals,
       {

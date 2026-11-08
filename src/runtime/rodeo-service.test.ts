@@ -137,3 +137,28 @@ it('allows the returning GM to recreate a missing native descriptor from the loc
   await expect(services.host.api('/poll', { instance: 'returning-host', since: 0 }, session)).rejects.toMatchObject({ status: 401 });
   await expect(services.host.api('', {}, null)).resolves.toMatchObject({ role: 'mj' });
 });
+it.each(['lost-offer','delayed-presence'])('retries negotiation when Owlbear has %s', async scenario => {
+  const {world,services}=await fixture();
+  const host=await services.host.api('',{},null),alice=await services.alice.api('/join',{},null);
+  await services.host.api('/poll',{instance:'host-instance',since:0},host);
+  await services.alice.api('/poll',{instance:'alice-instance',since:0},alice);
+  const send=services.alice.port.send;let dropped=false;
+  if(scenario==='lost-offer')services.alice.port.send=async(channel:string,data:any)=>{if(!dropped&&data.index===0){dropped=true;return;}await send(channel,data);};
+  else (world.players.find(p=>p.id==='alice')!.metadata[PLAYER_KEY] as any).instance='stale-instance';
+  await services.alice.api('/signal',{target:'host',instance:'host-instance',connection:'connection-test',description:{type:'offer',sdp:'test-offer'}},alice);
+  await new Promise(resolve=>setTimeout(resolve,30));
+  expect((await services.host.api('/poll',{instance:'host-instance',since:0},host)).signals).toEqual([]);
+  if(scenario==='delayed-presence')(world.players.find(p=>p.id==='alice')!.metadata[PLAYER_KEY] as any).instance='alice-instance';
+  await vi.waitFor(async()=>{const poll=await services.host.api('/poll',{instance:'host-instance',since:0},host);expect(poll.signals).toHaveLength(1);},{timeout:4000});
+});
+it('authenticates a guest using its own SDK connection metadata when the party snapshot omits connectionId', async () => {
+  const {world,services}=await fixture();const host=await services.host.api('',{},null),alice=await services.alice.api('/join',{},null);
+  await services.host.api('/poll',{instance:'h',since:0},host);await services.alice.api('/poll',{instance:'a',since:0},alice);
+  const others=services.host.port.others;services.host.port.others=async()=> (await others()).map((player:any)=>({...player,connectionId:undefined} as any));
+  await services.alice.api('/signal',{target:'host',instance:'h',connection:'guest-connection',description:{type:'offer',sdp:'guest-offer'}},alice);
+  await vi.waitFor(async()=>expect((await services.host.api('/poll',{instance:'h',since:0},host)).signals).toHaveLength(1));
+  const bob=world.players.find(p=>p.id==='bob')!;(bob.metadata[PLAYER_KEY] as any).sdkConnectionId='connection-alice';
+  await services.alice.api('/signal',{target:'host',instance:'h',connection:'ambiguous-connection',description:{type:'offer',sdp:'ambiguous-offer'}},alice);
+  await new Promise(resolve=>setTimeout(resolve,30));
+  expect((await services.host.api('/poll',{instance:'h',since:0},host)).signals).toHaveLength(1);
+});

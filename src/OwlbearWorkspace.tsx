@@ -1,5 +1,6 @@
+import { copyConnectionDiagnostics } from "./runtime/client";
 import { roomClient } from "@/lib/roomClient";
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useRoom } from "@/hooks/use-room";
 import { useLang } from "@/i18n/LanguageContext";
@@ -16,6 +17,14 @@ import RoomChat from "@/components/RoomChat";
 import RoomRollRequests from "@/components/RoomRollRequests";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
+function ConnectionStatus() {
+  const room=useRoom(); const [copied,setCopied]=useState(false);
+  const info=(room as unknown as {connectionDiagnostics?:Record<string,unknown>}).connectionDiagnostics;
+  if(!info)return null;
+  const disconnected=room.members.some(member=>member.id!==room.session?.id&&!room.connected.includes(member.id));
+  if(!disconnected)return null;
+  return <div className="mt-3 space-y-2 rounded border border-ink/20 p-3 text-sm"><p>Connexion aux participants en cours…</p><button type="button" className="underline" onClick={()=>{void copyConnectionDiagnostics().then(()=>setCopied(true));}}>{copied?'Diagnostic copié':'Copier le diagnostic connexion'}</button><details><summary className="cursor-pointer text-xs">Détails de connexion</summary><pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs">{JSON.stringify(info,null,2)}</pre></details></div>;
+}
 function Resources() {
   const room = useRoom();
   const { lang } = useLang();
@@ -40,7 +49,7 @@ export function OwlbearMJWorkspace({ characters }: { characters: Character[] }) 
   return <Tabs value={pane} onValueChange={setPane} className="space-y-4">
     <nav aria-label="Navigation MJ"><TabsList className="grid h-auto w-full grid-cols-4 bg-paper p-0" aria-label={lang === "fr" ? "Onglets MJ" : "GM tabs"}>{[["heroes", "Héros", "Heroes"], ["cards", "Cartes", "Cards"], ["resources", "Ressources", "Resources"], ["chat", "Discussion", "Chat"]].map(([id, fr, en]) => <TabsTrigger key={id} value={id} className="min-h-12 rounded-none border-b-2 border-transparent px-1 data-[state=active]:border-accent data-[state=active]:text-accent">{lang === "fr" ? fr : en}</TabsTrigger>)}</TabsList></nav>
     <RoomHeroProposalDialog />
-    <TabsContent value="heroes" className="space-y-5"><RoomProjectImport /><RoomHeroReserve characters={characters} /><RoomPlayersBoard characters={characters} /></TabsContent>
+    <TabsContent value="heroes" className="space-y-5"><RoomProjectImport /><RoomHeroReserve characters={characters} /><RoomPlayersBoard characters={characters} /><ConnectionStatus /></TabsContent>
     <TabsContent value="cards"><RoomPrivateResources characters={characters} /></TabsContent>
     <TabsContent value="resources"><Resources /></TabsContent>
     <TabsContent value="chat"><RoomChat messages={room.messages} memberId={room.session.id} members={room.members} /></TabsContent>
@@ -65,5 +74,5 @@ export function OwlbearPlayerWorkspace({ characters: _characters, invitation: _i
       <button type="button" className="min-h-11 border border-ink px-4 py-2 text-sm font-bold disabled:opacity-50" disabled={!recovery || Boolean(room.pendingHeroProposal) || !room.connected.length} onClick={()=>{setRecoveryError('');void roomClient.requestRoomHero(recovery).catch(error=>setRecoveryError(error.message));}}>{room.pendingHeroProposal ? (lang==='fr'?'En attente du MJ…':'Waiting for the GM…') : (lang==='fr'?'Demander au MJ':'Ask the GM')}</button>
       {!room.connected.length && <p role="status" className="text-sm">{lang==='fr'?'Connexion au MJ en cours…':'Connecting to the GM…'}</p>}
       {recoveryError && <p role="alert" className="text-sm text-destructive">{recoveryError}</p>}
-    </div></TabsContent><TabsContent value="chat">{chat}</TabsContent></Tabs>;
+    </div><ConnectionStatus /></TabsContent><TabsContent value="chat">{chat}</TabsContent></Tabs>;
 }

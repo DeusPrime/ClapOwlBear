@@ -1,3 +1,4 @@
+import {copyConnectionDiagnostics} from '@owlbear/runtime/client';
 import { localizeText, localizeNode } from '@/i18n/localize';
 ﻿import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -49,7 +50,7 @@ export default function RoomHeroAssignments({ characters, playerId }: { characte
         <label htmlFor={`room-hero-${player.id}`} className="block break-words text-sm font-bold">{localizeText("Fiche de ")}{localizeNode(player.name)}</label>
         <p className="text-xs text-muted-foreground">{room.sheets[player.id] ? `Héros actuel : ${room.sheets[player.id].nom || localizeText("Sans nom")}` : "Aucune fiche reçue"}</p>
         <div className="flex flex-col gap-3 sm:flex-row"><select id={`room-hero-${player.id}`} className="min-h-11 min-w-0 flex-1 rounded-sm border border-ink bg-paper px-3 text-sm" value={choices[player.id] || ""} onChange={event => setChoices(previous => ({ ...previous, [player.id]: event.target.value }))} disabled={Boolean(busy)}><option value="">{localizeText("Choisir parmi les héros de la salle…")}</option>{localizeNode(options)}</select><Button disabled={Boolean(busy) || !choices[player.id] || !room.connected.includes(player.id)} onClick={() => void assign(player.id)}>{localizeNode(busy === player.id ? "Envoi…" : "Attribuer la fiche")}</Button></div>
-        {localizeNode(!room.connected.includes(player.id) && <p className="text-xs text-muted-foreground">{localizeText("En attente de connexion du joueur pour transmettre la fiche.")}</p>)}
+        {localizeNode(!room.connected.includes(player.id) && <p className="text-xs text-muted-foreground">{localizeText("En attente de connexion du joueur pour transmettre la fiche.")} <button type="button" className="ml-2 underline" onClick={() => void copyConnectionDiagnostics()}>Copier le diagnostic connexion</button></p>)}
         <RoomLibraryPicker characters={characters} includeHeroes allowedTypes={['hero']} label={localizeText("Attribuer depuis un projet")} onSelect={async resource => { if (resource.type !== 'hero') return; const hero = await roomClient.addRoomHero(resource.item); await roomClient.assignCharacter(player.id, hero.id); }} />
       </li>)}</ul>
     </>}

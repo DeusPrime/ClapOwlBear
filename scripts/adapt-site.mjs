@@ -88,3 +88,8 @@ studio = studio.replace(
 );
 save(root + "lib/studioImport.ts", studio);
 await import("./strict-site.mjs");
+
+let heroAssignments = read(root + 'components/RoomHeroAssignments.tsx');
+heroAssignments = "import {copyConnectionDiagnostics} from '@owlbear/runtime/client';\n" + heroAssignments;
+heroAssignments = heroAssignments.replace('{localizeText("En attente de connexion du joueur pour transmettre la fiche.")}</p>', '{localizeText("En attente de connexion du joueur pour transmettre la fiche.")} <button type="button" className="ml-2 underline" onClick={() => void copyConnectionDiagnostics()}>Copier le diagnostic connexion</button></p>');
+save(root + 'components/RoomHeroAssignments.tsx',heroAssignments);

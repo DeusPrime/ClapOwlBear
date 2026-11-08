@@ -20,3 +20,9 @@ it('connects isolated participants without WebRTC and delivers ordered encrypted
     await expect.poll(()=>replies).toEqual(['public roll']);
   }finally{first.stop();second.stop();}
 });
+it('retries a lost ready message without falsely marking the player connected', async () => {
+  const listeners=new Map<string,(event:any)=>void>();let dropped=false;
+  const wire=(id:string)=>({connectionId:id,subscribe:(fn:any)=>{listeners.set(id,fn);return()=>{};},send:async(data:any)=>{if(id==='p'&&data.type==='ready'&&!dropped){dropped=true;return;}for(const [other,fn]of listeners)if(other!==id)queueMicrotask(()=>fn({connectionId:id,data:structuredClone(data)}));}});
+  const a=createNativePeerBridge(wire('p')),b=createNativePeerBridge(wire('h'));const player=a.create(),host=b.create();const channel=player.createDataChannel('room');host.ondatachannel=()=>{};
+  try{await player.setLocalDescription();await host.setRemoteDescription(player.localDescription!);await host.setLocalDescription();await player.setRemoteDescription(host.localDescription!);expect(channel.readyState).toBe('connecting');await expect.poll(()=>channel.readyState,{timeout:3000}).toBe('open');expect(a.diagnostics().readySent).toBeGreaterThanOrEqual(2);}finally{a.stop();b.stop();}
+});

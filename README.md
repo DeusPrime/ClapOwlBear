@@ -1,4 +1,4 @@
-# CLAP! pour Owlbear Rodeo — 0.2.11
+# CLAP! pour Owlbear Rodeo — 0.2.12
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
@@ -11,6 +11,12 @@ Cette version ajoute `background_url`. Faire recharger le manifeste dans Owlbear
 Chaque participant doit avoir l’extension active dans la salle. Le moteur d’arrière-plan du MJ crée automatiquement la partie, les joueurs la rejoignent avec leurs identités Owlbear distinctes. Aucun identifiant de salle CLAP!, compte du site ou mot de passe supplémentaire à saisir.
 
 La fermeture du panneau ne ferme pas la partie : la page d’arrière-plan conserve la connexion tant que l’onglet Owlbear reste ouvert. Le MJ conserve l’état et les sauvegardes sur son navigateur ; les joueurs disposent de leur propre fiche et de leurs ressources locales.
+
+## Diagnostic et négociation 0.2.12
+
+Les offres de connexion sont confirmées et réessayées si un message ou une mise à jour de présence arrive en retard. Le joueur attend la confirmation du MJ avant d’annoncer une liaison ouverte ; le premier message d’ouverture est réessayé lui aussi. Les contrôles d’identité et le chiffrement restent utilisés.
+
+En cas d’attente, **Copier le diagnostic connexion** dans la fenêtre d’attribution fournit les versions, le mode et les compteurs de négociation et de transport. Il ne contient ni fiches ni jetons de session. Le détail est aussi affiché dans l’onglet Héros tant qu’un participant n’est pas relié.
 
 ## Connexion et invités 0.2.11
 

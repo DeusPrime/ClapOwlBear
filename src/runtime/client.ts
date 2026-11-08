@@ -1,3 +1,6 @@
+declare const __APP_VERSION__: string;
+let readConnectionDiagnostics: () => unknown = () => undefined;
+export const copyConnectionDiagnostics = () => navigator.clipboard.writeText(JSON.stringify({interface:typeof __APP_VERSION__==='string'?__APP_VERSION__:'development',moteur:readConnectionDiagnostics() || 'aucun diagnostic reçu du moteur'}, null, 2));
 let peerFactory: ((config: RTCConfiguration) => RTCPeerConnection) | undefined;
 export const configurePeerFactory = (factory: (config: RTCConfiguration) => RTCPeerConnection) => { peerFactory = factory; };
 export const createRoomPeer = (config: RTCConfiguration) => peerFactory ? peerFactory(config) : new RTCPeerConnection(config);
@@ -116,6 +119,7 @@ export function sharedRoomClient<T extends object>(factory: () => T): T {
   const bus = new BroadcastChannel(context.channel);
   foregroundBus = bus;
   let snapshot: any = empty;
+  readConnectionDiagnostics = () => snapshot.connectionDiagnostics;
   const listeners = new Set<() => void>();
   const pending = new Map<
     string,
