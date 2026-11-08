@@ -234,7 +234,6 @@ export default function RollDialog({
   const rollDisabledReason = [
     criticalLocked && !climaxAllowed ? `${localizeText("Jet bloqué par un état critique")} : ${(criticalLockReasons.length ? criticalLockReasons : ["État critique"]).map(reason => localizeText(reason)).join(", ")}.${climaxUnavailable ? ` ${localizeText("Climax déjà utilisé. Sors de tous les états critiques pour le réutiliser.")}` : !simple ? ` ${localizeText("Active Climax dans les attributs pour effectuer ce jet.")}` : ""}` : "",
     selectionIncomplete ? localizeText("Sélectionne les attributs requis en cliquant sur le potentiel.") : "",
-    logging ? localizeText("Enregistrement du jet dans la salle en cours…") : "",
     visibilityBusy ? localizeText("Mise à jour de la visibilité du jet en cours…") : "",
     !logging && pendingLog.current ? localizeText("Réessaie l’envoi du jet précédent avant de relancer.") : "",
   ].filter(Boolean).join(" ");

@@ -109,4 +109,5 @@ save(root + 'components/RoomHeroAssignments.tsx',heroAssignments);
 let rollDialog = read(root + 'components/RollDialog.tsx');
 rollDialog = "import {afterRollPaint} from '@owlbear/runtime/after-roll-paint';\n" + rollDialog;
 rollDialog = rollDialog.replace('    void logRoll(entry);','    afterRollPaint(() => { void logRoll(entry); });');
+rollDialog = rollDialog.replace('    logging ? localizeText("Enregistrement du jet dans la salle en cours…") : "",\n', '');
 save(root + 'components/RollDialog.tsx',rollDialog);

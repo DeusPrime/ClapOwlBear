@@ -1,4 +1,4 @@
-# CLAP! pour Owlbear Rodeo — 0.2.16
+# CLAP! pour Owlbear Rodeo — 0.2.17
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
