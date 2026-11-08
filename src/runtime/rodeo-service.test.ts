@@ -162,3 +162,19 @@ it('authenticates a guest using its own SDK connection metadata when the party s
   await new Promise(resolve=>setTimeout(resolve,30));
   expect((await services.host.api('/poll',{instance:'h',since:0},host)).signals).toHaveLength(1);
 });
+
+it('defers an offer accepted while a poll still holds an older participant snapshot', async () => {
+  const {services}=await fixture();const host=await services.host.api('',{},null),alice=await services.alice.api('/join',{},null);
+  await services.host.api('/poll',{instance:'h',since:0},host);await services.alice.api('/poll',{instance:'old-player',since:0},alice);
+  const service=services.host as any;const players=service.players.bind(service);let calls=0;let release!:()=>void;let reached!:()=>void;
+  const waiting=new Promise<void>(resolve=>{reached=resolve;});const gate=new Promise<void>(resolve=>{release=resolve;});
+  const spy=vi.spyOn(service,'players').mockImplementation(async()=>{const snapshot=await players();if(++calls===3){reached();await gate;}return snapshot;});
+  try {
+    const pending=services.host.api('/poll',{instance:'h',since:0},host);await waiting;
+    await services.alice.api('/poll',{instance:'new-player',since:0},alice);
+    await services.alice.api('/signal',{target:'host',instance:'h',connection:'new-peer',description:{type:'offer',sdp:'new-offer'}},alice);
+    await vi.waitFor(()=>expect(services.host.diagnostics.accepted).toBe(1));release();const first=await pending;
+    expect(first.members.find((m:any)=>m.id==='alice').instance).toBe('old-player');expect(first.signals).toEqual([]);
+    const next=await services.host.api('/poll',{instance:'h',since:0},host);expect(next.signals).toHaveLength(1);expect(next.members.find((m:any)=>m.id==='alice').instance).toBe(next.signals[0].senderInstance);
+  } finally {release();spy.mockRestore();}
+});

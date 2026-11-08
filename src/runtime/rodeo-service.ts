@@ -262,6 +262,9 @@ export class OwlbearRoomService {
           [PLAYER_KEY]: { sdkConnectionId: self.connectionId, active: true, instance: body.instance, transport: "native-v1", version: clientVersion },
         });
       }
+      // Freeze the signal cursor before awaiting presence: an offer accepted during
+      // this read belongs to the next poll, whose member instances can match it.
+      const signalCursor = this.sequence;
       const party = await this.players();
       this.diagnostics.participants=party.filter(player=>(player.metadata[PLAYER_KEY] as any)?.active).map(player=>({role:player.role,version:String((player.metadata[PLAYER_KEY] as any)?.version||'inconnue'),partyConnection:typeof player.connectionId==='string',sdkConnection:typeof (player.metadata[PLAYER_KEY] as any)?.sdkConnectionId==='string'}));
       const outdated = party.find(player => player.id !== self.id && (player.metadata[PLAYER_KEY] as any)?.active && (player.metadata[PLAYER_KEY] as any)?.transport !== 'native-v1');
@@ -290,7 +293,7 @@ export class OwlbearRoomService {
         self: { role: host ? "mj" : "player", hideRolls: false },
         roomRevision: Date.now(),
         members,
-        signals: this.signals.filter((s) => s.seq > body.since),
+        signals: this.signals.filter((s) => s.seq > body.since && s.seq <= signalCursor),
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
         relayConfigured: false,
       } satisfies RoomPoll;
@@ -464,6 +467,7 @@ export class OwlbearRoomService {
     this.acknowledged.add(event.connectionId+':'+packet.id);if(this.acknowledged.size>100)this.acknowledged.delete(this.acknowledged.values().next().value!);
     await this.port.send(SIGNAL,{ack:packet.id,target:sender.id,instance:data.senderInstance});
     this.diagnostics.accepted++;
+    this.diagnostics.lastReject="";
     this.signals = [
       ...this.signals,
       {
