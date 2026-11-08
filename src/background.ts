@@ -47,9 +47,12 @@ async function start() {
   };
   serveRoomClient(roomClient, channel, remember, () => ({
     error: roomClient.snapshot().error || joinError || toastError || service.notice,
+    sheetTransfers:roomClient.snapshot().session?.role==='mj'?roomClient.pendingAssignmentIds():service.loadingPlayers,
     connectionDiagnostics: { capturedAt:new Date().toISOString(),runtimeAgeSeconds:Math.round((Date.now()-runtimeStarted)/1000),session:roomClient.connectionState(), version: __APP_VERSION__, mode:service.linked?'site':'native',role:self.role,members:roomClient.snapshot().members.length,connected:roomClient.snapshot().connected.length,signals:service.diagnostics,transport:bridge.diagnostics() },
   }));
+  let transferKey="";let transferQueue=Promise.resolve();
   roomClient.subscribe(() => {
+    if(roomClient.snapshot().session?.role==='mj'){const ids=roomClient.pendingAssignmentIds();const key=JSON.stringify(ids);if(key!==transferKey){transferKey=key;transferQueue=transferQueue.catch(()=>{}).then(()=>service.publishSheetTransfers(ids));}}
     void remember();
   });
   // sessionStorage disappears when the Owlbear tab is closed. Restore only this

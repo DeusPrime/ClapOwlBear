@@ -42,6 +42,9 @@ source = source.replace('if (!member?.online || member.instance !== peer.instanc
 // Without resource-ID remapping, the GM already owns the exact assigned sheet.
 source = source.replace("this.peers.forEach(peer => { peer.sheet = ''; });", "const assignedCharacter=await getCharacter(character.id)||character;const assignedSignature=sheetSignature(roomCharacterSchema.parse({...assignedCharacter,portrait:assignedCharacter.portrait||undefined}));this.peers.forEach(peer => { peer.sheet = message.resources?.length ? '' : assignedSignature; });");
 source = source.replace('const message: RoomMessage = { kind: "sheet", character: parsed?.success ? parsed.data : null };\n      const json = JSON.stringify(message);', 'const message: RoomMessage = { kind: "sheet", character: parsed?.success ? parsed.data : null };\n      const json = sheetSignature(message.character);');
+source = source.replace('type Snapshot = {','type Snapshot = {\n  sheetTransfers?: string[];');
+source = source.replace('  async assignCharacter(playerId: string, characterId: string) {', '  private preparingAssignments=new Set<string>();\n  pendingAssignmentIds(){return [...new Set([...this.preparingAssignments,...this.assignments.keys()])].filter(id=>this.state.connected.includes(id));}\n  async assignCharacter(playerId:string,characterId:string){this.preparingAssignments.add(playerId);this.update({});try{return await this.prepareCharacterAssignment(playerId,characterId);}finally{this.preparingAssignments.delete(playerId);this.update({});}}\n  private async prepareCharacterAssignment(playerId: string, characterId: string) {');
+source = source.replace('this.assignments.delete(sender);', '{this.assignments.delete(sender);this.update({});}');
 source = source.replace("new RTCPeerConnection({ iceServers: this.iceServers })", "createRoomPeer({ iceServers: this.iceServers })");
 source = source.replace(
   "export const roomClient = new RoomClient();",
@@ -111,3 +114,8 @@ rollDialog = "import {afterRollPaint} from '@owlbear/runtime/after-roll-paint';\
 rollDialog = rollDialog.replace('    void logRoll(entry);','    afterRollPaint(() => { void logRoll(entry); });');
 rollDialog = rollDialog.replace('    logging ? localizeText("Enregistrement du jet dans la salle en cours…") : "",\n', '');
 save(root + 'components/RollDialog.tsx',rollDialog);
+
+let playerBoard=read(root+'components/RoomPlayersBoard.tsx');
+playerBoard="import SheetLoading from '@owlbear/SheetLoading';\n"+playerBoard;
+playerBoard=playerBoard.replace('className="flex aspect-[3/4] w-full items-center justify-center overflow-hidden bg-ink/5">','className="relative flex aspect-[3/4] w-full items-center justify-center overflow-hidden bg-ink/5">{room.sheetTransfers?.includes(member.id) && <div className="absolute inset-0 z-10 flex items-center justify-center bg-paper/90"><SheetLoading /></div>}');
+save(root+'components/RoomPlayersBoard.tsx',playerBoard);

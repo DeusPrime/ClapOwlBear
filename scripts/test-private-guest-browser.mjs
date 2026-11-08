@@ -13,11 +13,13 @@ function add(id,role,name){players.set(id,{id,role,name,connectionId:'sdk-'+id,m
 add('host','GM','MJ');add('guest-old','PLAYER','Invité');
 function parentPage(){
  const id=new URL(location.href).searchParams.get('player');const appOrigin='http://localhost:'+location.port;
- const subscriptions=new Map();let since=0;window.__qaModals=[];
+ const subscriptions=new Map();const partyFrames=new Set();let since=0;window.__qaModals=[];
  const receive=(frame,key,data)=>frame.postMessage({id:key,data},appOrigin);
  const ready=frame=>frame.contentWindow.postMessage({id:'OBR_READY',data:{ref:'qa',userId:id}},appOrigin);
  addEventListener('message',event=>{void(async()=>{
   const msg=event.data;if(!msg||event.origin!==appOrigin)return;
+  if(msg.id==='OBR_PARTY_SUBSCRIBE'){partyFrames.add(event.source);return;}
+  if(msg.id==='OBR_PARTY_UNSUBSCRIBE'){partyFrames.delete(event.source);return;}
   if(msg.id==='OBR_BROADCAST_SUBSCRIBE'){const channel=msg.data.channel;if(!subscriptions.has(channel))subscriptions.set(channel,new Set());subscriptions.get(channel).add(event.source);return;}
   if(msg.id==='OBR_BROADCAST_UNSUBSCRIBE'){subscriptions.get(msg.data.channel)?.delete(event.source);return;}
   if(msg.id==='OBR_MODAL_OPEN'){
@@ -33,7 +35,7 @@ function parentPage(){
   const response=await fetch('/sdk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({player:id,message:msg})});
   const result=await response.json();receive(event.source,msg.id+'_RESPONSE'+msg.nonce,result);
  })().catch(console.error);});
- setInterval(()=>{void fetch('/events?player='+id+'&since='+since).then(r=>r.json()).then(batch=>{for(const event of batch){since=Math.max(since,event.seq);for(const frame of subscriptions.get(event.channel)||[])receive(frame,'OBR_BROADCAST_MESSAGE_'+event.channel,{connectionId:event.connectionId,data:event.data});}}).catch(()=>{});},40);
+ setInterval(()=>{void fetch('/events?player='+id+'&since='+since).then(r=>r.json()).then(batch=>{for(const event of batch){since=Math.max(since,event.seq);if(event.kind==='party'){for(const frame of partyFrames)receive(frame,'OBR_PARTY_EVENT_CHANGE',{players:event.data.players.filter(p=>p.id!==id)});continue;}for(const frame of subscriptions.get(event.channel)||[])receive(frame,'OBR_BROADCAST_MESSAGE_'+event.channel,{connectionId:event.connectionId,data:event.data});}}).catch(()=>{});},40);
  for(const [name,file]of[['background','background.html'],['panel','index.html']]){
   const f=document.createElement('iframe');f.id=name;f.src=appOrigin+'/ClapOwlBear/'+file+'?obrref='+btoa(location.origin+' cross-private-room');f.onload=()=>ready(f);
   if(name==='background')f.style.display='none';else f.style.cssText='width:100%;height:900px;border:0';document.body.append(f);
@@ -56,7 +58,7 @@ const server=createServer(async(req,res)=>{try{
    case 'OBR_PLAYER_GET_SYNC_VIEW':value={syncView:false};break;
    case 'OBR_PARTY_GET_PLAYERS':value={players:[...players.values()].filter(p=>p.id!==player)};break;
    case 'OBR_ROOM_GET_METADATA':value={metadata:roomMetadata};break;
-   case 'OBR_PLAYER_SET_METADATA':Object.assign(self.metadata,data.update);break;
+   case 'OBR_PLAYER_SET_METADATA':Object.assign(self.metadata,data.update);events.push({seq:++sequence,player,kind:'party',data:{players:structuredClone([...players.values()])}});break;
    case 'OBR_ROOM_SET_METADATA':Object.assign(roomMetadata,data.update);break;
    case 'OBR_BROADCAST_SEND_MESSAGE':if(player==='guest-old'&&data.channel==='fr.clap.owlbear/v2/signal'&&data.data.index===0&&!lostOffer){lostOffer=true;break;}if(player==='guest-old'&&data.channel==='fr.clap.owlbear/v3/data'&&data.data.type==='ready'&&!lostReady){lostReady=true;break;}if(data.options?.destination!=='LOCAL')events.push({seq:++sequence,player,connectionId:self.connectionId,channel:data.channel,data:data.data});break;
   }
@@ -102,7 +104,9 @@ try{
  const zip=await new JSZip().file('studio.json',JSON.stringify({format:'clap-studio',version:1,project:{id:'project-source',name:'Guest recovery QA'},heroes:[hero],resources:[],tools:[]})).generateAsync({type:'uint8array'});
  await call(host,'host','importProject',[Array.from(zip),undefined,true]);
  const heroId=(await call(host,'host','snapshot')).roomHeroes[0].id;await call(host,'host','assignCharacter',['guest-old',heroId]);
+ const hostLoader=host.frameLocator('#panel').getByRole('button',{name:'Ouvrir la fiche de Invité',exact:true}).getByRole('status');const guestLoader=guest.frameLocator('#panel').getByRole('status').filter({hasText:'Chargement en cours'});await hostLoader.waitFor();await guestLoader.waitFor();await hostLoader.screenshot({path:"release/qa/sheet-loading-gm.png"});await guestLoader.screenshot({path:"release/qa/sheet-loading-player.png"});
  try {await until(async()=> (await call(guest,'guest-old','snapshot')).session.characterId===heroId,'first hero assignment',90000);} catch(error) {console.log('HOST',JSON.stringify((await call(host,'host','snapshot')).connectionDiagnostics));console.log('GUEST',JSON.stringify((await call(guest,'guest-old','snapshot')).connectionDiagnostics));throw error;}
+ await hostLoader.waitFor({state:'detached'});await guestLoader.waitFor({state:'detached'});
  try {await call(guest,'guest-old','sendChat',['Personal sheet only QA']);} catch(error){console.log('HOST',JSON.stringify((await call(host,'host','snapshot')).connectionDiagnostics));console.log('GUEST',JSON.stringify((await call(guest,'guest-old','snapshot')).connectionDiagnostics));throw error;}
  await until(async()=> (await call(host,'host','snapshot')).messages.some(m=>m.text==='Personal sheet only QA'),'small personal sync');
  const guestBytes=events.filter(e=>e.player==='guest-old'&&e.channel==='fr.clap.owlbear/v3/data'&&e.data.type==='data').reduce((sum,e)=>sum+e.data.text.length,0);assert.ok(guestBytes<20000,'The player must not echo the assigned portrait back to the GM');

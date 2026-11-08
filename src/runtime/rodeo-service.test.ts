@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { OwlbearRoomService, ROOM_KEY, PLAYER_KEY, HOST_KEY } from "./rodeo-service";
+import { OwlbearRoomService, ROOM_KEY, PLAYER_KEY, HOST_KEY, TRANSFER_KEY } from "./rodeo-service";
 import { FakeRodeo } from "../test/fakes";
 const instances: OwlbearRoomService[] = [];
 afterEach(() => {
@@ -177,4 +177,14 @@ it('defers an offer accepted while a poll still holds an older participant snaps
     expect(first.members.find((m:any)=>m.id==='alice').instance).toBe('old-player');expect(first.signals).toEqual([]);
     const next=await services.host.api('/poll',{instance:'h',since:0},host);expect(next.signals).toHaveLength(1);expect(next.members.find((m:any)=>m.id==='alice').instance).toBe(next.signals[0].senderInstance);
   } finally {release();spy.mockRestore();}
+});
+
+it('exposes sheet loading only from the current GM and clears it after receipt',async()=>{
+  const {world,services}=await fixture();const host=await services.host.api('',{},null),alice=await services.alice.api('/join',{},null);
+  await services.host.publishSheetTransfers(['alice']);await services.alice.api('/poll',{instance:'a',since:0},alice);expect(services.alice.loadingPlayers).toEqual(['alice']);
+  await services.bob.publishSheetTransfers(['bob']);expect(world.players.find(p=>p.id==='bob')!.metadata[TRANSFER_KEY]).toBeUndefined();
+  world.players.find(p=>p.id==='bob')!.metadata[TRANSFER_KEY]={...(world.players.find(p=>p.id==='host')!.metadata[TRANSFER_KEY] as any),players:['bob']};
+  await services.alice.api('/poll',{instance:'a',since:0},alice);expect(services.alice.loadingPlayers).toEqual(['alice']);
+  await services.host.publishSheetTransfers([]);await services.alice.api('/poll',{instance:'a',since:0},alice);expect(services.alice.loadingPlayers).toEqual([]);
+  await services.host.publishSheetTransfers(['alice']);(world.players.find(p=>p.id==='host')!.metadata[TRANSFER_KEY] as any).epoch='old-room';await services.alice.api('/poll',{instance:'a',since:0},alice);expect(services.alice.loadingPlayers).toEqual([]);
 });

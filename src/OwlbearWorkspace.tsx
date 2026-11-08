@@ -1,3 +1,4 @@
+import SheetLoading from './SheetLoading';
 import { copyConnectionDiagnostics, connectionError } from "./runtime/client";
 import { roomClient } from "@/lib/roomClient";
 import { useEffect, useState } from "react";
@@ -66,13 +67,14 @@ export function OwlbearPlayerWorkspace({ characters: _characters, invitation: _i
   const [recovery, setRecovery] = useState("");
   const [recoveryError, setRecoveryError] = useState("");
   if (room.session?.role !== "player") return null;
+  const loading=Boolean(room.sheetTransfers?.includes(room.session.id));
   const chat = <RoomChat messages={room.messages} memberId={room.session.id} members={room.members} draft={draft} onDraftChange={setDraft} recipient={recipient} onRecipientChange={setRecipient} />;
   const requests = <RoomRollRequests onPerform={id => { setRequestId(id); setPane("hero"); setHeroView(n => n + 1); }} />;
-  return room.session.characterId ? <CharacterEditor key={room.session.characterId} characterId={room.session.characterId} primaryInRoom compactRoom roomDiscussion={chat} roomRequests={requests} roomRequestId={requestId} roomHeroViewKey={heroView} /> : <Tabs value={pane} onValueChange={setPane} className="px-4"><TabsList className="grid h-auto w-full grid-cols-2" aria-label={lang === "fr" ? "Onglets joueur" : "Player tabs"}><TabsTrigger value="hero" className="min-h-12">{lang === "fr" ? "Mon héros" : "My hero"}</TabsTrigger><TabsTrigger value="chat" className="min-h-12">{lang === "fr" ? "Discussion" : "Chat"}</TabsTrigger></TabsList>{requests}<TabsContent value="hero"><p className="border-2 border-dashed border-ink/25 p-8 text-center">{lang === "fr" ? "Ton héros apparaîtra ici. Le MJ peut t’attribuer une fiche." : "Your hero will appear here. The GM can assign you a sheet."}</p><div className="mt-4 space-y-3">
+  return room.session.characterId ? <div aria-busy={loading}>{loading && <SheetLoading/>}<CharacterEditor key={room.session.characterId} characterId={room.session.characterId} primaryInRoom compactRoom roomDiscussion={chat} roomRequests={requests} roomRequestId={requestId} roomHeroViewKey={heroView} /></div> : <Tabs value={pane} onValueChange={setPane} className="px-4"><TabsList className="grid h-auto w-full grid-cols-2" aria-label={lang === "fr" ? "Onglets joueur" : "Player tabs"}><TabsTrigger value="hero" className="min-h-12">{lang === "fr" ? "Mon héros" : "My hero"}</TabsTrigger><TabsTrigger value="chat" className="min-h-12">{lang === "fr" ? "Discussion" : "Chat"}</TabsTrigger></TabsList>{requests}<TabsContent value="hero" aria-busy={loading}>{loading ? <SheetLoading/> : <><p className="border-2 border-dashed border-ink/25 p-8 text-center">{lang === "fr" ? "Ton héros apparaîtra ici. Le MJ peut t’attribuer une fiche." : "Your hero will appear here. The GM can assign you a sheet."}</p><div className="mt-4 space-y-3">
       <label className="block text-sm font-bold" htmlFor="recover-room-hero">{lang === 'fr' ? 'Récupérer un héros' : 'Recover a hero'}</label>
       <select id="recover-room-hero" value={recovery} disabled={Boolean(room.pendingHeroProposal)} onChange={event=>setRecovery(event.target.value)} className="min-h-11 w-full border border-ink bg-paper px-3"><option value="">{lang === 'fr' ? 'Choisir son héros…' : 'Choose your hero…'}</option>{room.availableHeroes?.map(hero=><option key={hero.id} value={hero.id}>{hero.name}</option>)}</select>
       <button type="button" className="min-h-11 border border-ink px-4 py-2 text-sm font-bold disabled:opacity-50" disabled={!recovery || Boolean(room.pendingHeroProposal) || !room.connected.length} onClick={()=>{setRecoveryError('');void roomClient.requestRoomHero(recovery).catch(error=>setRecoveryError(error.message));}}>{room.pendingHeroProposal ? (lang==='fr'?'En attente du MJ…':'Waiting for the GM…') : (lang==='fr'?'Demander au MJ':'Ask the GM')}</button>
       {!room.connected.length && <p role="status" className="text-sm">{lang==='fr'?'Connexion au MJ en cours…':'Connecting to the GM…'}</p>}
       {recoveryError && <p role="alert" className="text-sm text-destructive">{recoveryError}</p>}
-    </div><ConnectionStatus /></TabsContent><TabsContent value="chat">{chat}</TabsContent></Tabs>;
+    </div></>}<ConnectionStatus /></TabsContent><TabsContent value="chat">{chat}</TabsContent></Tabs>;
 }

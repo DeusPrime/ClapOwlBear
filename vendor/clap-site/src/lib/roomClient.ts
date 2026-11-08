@@ -22,6 +22,7 @@ const API = (import.meta.env.VITE_ROOM_API_URL || "/api/rooms").replace(/\/$/, "
 const STORAGE = "clap-room-session-v1";
 type Peer = { pc: RTCPeerConnection; transport?: RoomTransport; connection: string; instance: string; started: number; sheet: string; assignment?: string; resources?: Map<string, string> };
 type Snapshot = {
+  sheetTransfers?: string[];
   projectName?: string;
   owlbearUrl?: string;
   projectId?: string;
@@ -483,7 +484,10 @@ export class RoomClient {
     this.forget();
   }
   private forget() { const code = this.state.session?.room; this.stop(); if (code) forgetOwnedRoom(code); sessionStorage.removeItem(STORAGE); this.update({ session: null, owlbearUrl: undefined, projectName: undefined, error: "" }); }
-  async assignCharacter(playerId: string, characterId: string) {
+  private preparingAssignments=new Set<string>();
+  pendingAssignmentIds(){return [...new Set([...this.preparingAssignments,...this.assignments.keys()])].filter(id=>this.state.connected.includes(id));}
+  async assignCharacter(playerId:string,characterId:string){this.preparingAssignments.add(playerId);this.update({});try{return await this.prepareCharacterAssignment(playerId,characterId);}finally{this.preparingAssignments.delete(playerId);this.update({});}}
+  private async prepareCharacterAssignment(playerId: string, characterId: string) {
     const session = this.state.session;
     const member = this.state.members.find(member => member.id === playerId && member.role === 'player');
     if (session?.role !== 'mj' || !member) throw new Error('Attribution réservée au MJ de la salle.');
@@ -1006,7 +1010,7 @@ export class RoomClient {
     }
     if (message.kind === 'assign-sheet') { void this.receiveAssignment(sender, message); return; }
     if (message.kind === 'assigned-sheet') {
-      if (session.role === 'mj' && this.assignments.get(sender)?.assignmentId === message.assignmentId) this.assignments.delete(sender);
+      if (session.role === 'mj' && this.assignments.get(sender)?.assignmentId === message.assignmentId) {this.assignments.delete(sender);this.update({});}
       return;
     }
     if (message.kind === "sheet") {

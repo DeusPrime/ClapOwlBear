@@ -7,6 +7,7 @@ import type { RoomSession, RoomPoll, RoomSignal } from "@/lib/roomProtocol";
 export const ROOM_KEY = "fr.clap.owlbear/v2/room",
   PLAYER_KEY = "fr.clap.owlbear/v2/player";
 export const HOST_KEY = "fr.clap.owlbear/v2/host";
+export const TRANSFER_KEY='fr.clap.owlbear/v2/sheet-transfer';
 const SIGNAL = "fr.clap.owlbear/v2/signal";
 type Descriptor = {
   site?: SiteLink;
@@ -27,6 +28,7 @@ export interface RodeoPort {
   setRoomMetadata: (value: Record<string, unknown>) => Promise<void>;
   setPlayerMetadata: (value: Record<string, unknown>) => Promise<void>;
   send: (channel: string, data: unknown) => Promise<void>;
+  onPlayersChange?: (callback:(players:Player[])=>void)=>()=>void;
   onSignal: (
     callback: (event: { connectionId: string; data: unknown }) => void,
   ) => () => void;
@@ -48,6 +50,7 @@ export async function sdkPort(): Promise<RodeoPort> {
     setRoomMetadata: (v) => OBR.room.setMetadata(v),
     setPlayerMetadata: (v) => OBR.player.setMetadata(v),
     send: (c, d) => OBR.broadcast.sendMessage(c, d, { destination: "REMOTE" }),
+    onPlayersChange: cb => OBR.party.onChange(cb),
     onSignal: (cb) => OBR.broadcast.onMessage(SIGNAL, cb),
   };
 }
@@ -55,6 +58,8 @@ export class OwlbearRoomService {
   paused = false;
   linked = false;
   notice = "";
+  loadingPlayers:string[]=[];
+  private stopPlayers?:()=>void;
   diagnostics={sent:0,received:0,accepted:0,lastReject:'',lastError:'',participants:[] as {role:string;version:string;partyConnection:boolean;sdkConnection:boolean}[]};
   readonly code: string;
   private sequence = 0;
@@ -83,6 +88,7 @@ export class OwlbearRoomService {
     this.code = code;
   }
   async start() {
+    this.stopPlayers=this.port.onPlayersChange?.(players=>{void this.descriptor().then(d=>{this.readSheetTransfers(players,d);}).catch(()=>{});});
     this.dispose = this.port.onSignal((event) => {
       this.receiving = this.receiving
         .then(() => this.receive(event))
@@ -94,6 +100,7 @@ export class OwlbearRoomService {
     });
   }
   stop() {
+    this.stopPlayers?.();
     this.dispose?.();
     for(const job of this.outgoing.values())clearTimeout(job.timer);this.outgoing.clear();
   }
@@ -117,6 +124,12 @@ export class OwlbearRoomService {
       )
       .sort((a, b) => (b.revision || 0) - (a.revision || 0))[0];
   }
+  private readSheetTransfers(players:Player[],d?:Descriptor){
+    const info=d?players.find(p=>p.id===d.hostId&&p.role==='GM')?.metadata[TRANSFER_KEY] as any:undefined;
+    const next=d&&!d.closed&&info?.epoch===d.epoch&&Array.isArray(info.players)?info.players.filter((id:unknown):id is string=>typeof id==='string'&&!d.blocked.includes(id)).slice(0,16):[];
+    if(JSON.stringify(next)!==JSON.stringify(this.loadingPlayers)){this.loadingPlayers=next;if(typeof window!=='undefined')window.dispatchEvent(new Event('clap-integration-state'));}
+  }
+  async publishSheetTransfers(ids:string[]){const self=await this.port.self();const d=await this.descriptor();if(!d||d.hostId!==self.id||self.role!=='GM')return;await this.port.setPlayerMetadata({[TRANSFER_KEY]:{epoch:d.epoch,players:ids.slice(0,16)}});}
   private async players() {
     return [await this.port.self(), ...(await this.port.others())];
   }
@@ -266,6 +279,7 @@ export class OwlbearRoomService {
       // this read belongs to the next poll, whose member instances can match it.
       const signalCursor = this.sequence;
       const party = await this.players();
+      this.readSheetTransfers(party,d);
       this.diagnostics.participants=party.filter(player=>(player.metadata[PLAYER_KEY] as any)?.active).map(player=>({role:player.role,version:String((player.metadata[PLAYER_KEY] as any)?.version||'inconnue'),partyConnection:typeof player.connectionId==='string',sdkConnection:typeof (player.metadata[PLAYER_KEY] as any)?.sdkConnectionId==='string'}));
       const outdated = party.find(player => player.id !== self.id && (player.metadata[PLAYER_KEY] as any)?.active && (player.metadata[PLAYER_KEY] as any)?.transport !== 'native-v1');
       const notice = outdated ? 'Le participant « '+outdated.name.slice(0,40)+' » utilise une ancienne version de CLAP!. Rechargez l’extension chez tous les participants.' : '';
