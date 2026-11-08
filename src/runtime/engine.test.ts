@@ -1,5 +1,6 @@
 ﻿// @vitest-environment jsdom
 import "fake-indexeddb/auto";
+import JSZip from "jszip";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { FakeRodeo, MemoryPeer } from "../test/fakes";
 import { OwlbearRoomService } from "./rodeo-service";
@@ -34,6 +35,40 @@ async function engine(
   return client;
 }
 describe("Moteur CLAP! partagé — MJ et joueurs", () => {
+
+  it("imports a full project into the room, restricts it to the MJ and restores its export", async () => {
+    vi.stubGlobal("RTCPeerConnection", MemoryPeer);
+    const world = new FakeRodeo(); world.add("host", "GM"); world.add("alice", "PLAYER");
+    const hs = new OwlbearRoomService(world.port("host"), "ABCDABCD1234");
+    const ps = new OwlbearRoomService(world.port("alice"), "ABCDABCD1234");
+    services.push(hs, ps); await hs.start(); await ps.start();
+    const host = await engine(hs, "host");
+    const player = await engine(ps, "alice", "ABCDABCD1234");
+    const { blankCharacter } = await import("@/lib/characters");
+    const { blankPower } = await import("@/lib/powers");
+    const power = { ...blankPower(), directoryId: "source", titre: "Project card" };
+    const hero = { ...blankCharacter(), directoryId: "source", nom: "Project hero", linkedResources: [{ type: "power", id: power.id }] };
+    const bytes = await new JSZip().file("studio.json", JSON.stringify({ format: "clap-studio", version: 1, project: { id: "source", name: "Imported film" }, heroes: [hero], resources: [{ type: "power", item: power }], tools: [] })).generateAsync({ type: "arraybuffer" });
+    await expect(player.importProject(bytes)).rejects.toThrow("MJ");
+    await expect(host.importProject(new ArrayBuffer(0))).rejects.toThrow();
+    expect(host.snapshot().projectName).toBeUndefined();
+    await host.importProject(bytes);
+    expect(host.snapshot().projectName).toBe("Imported film");
+    expect(host.snapshot().roomHeroes).toHaveLength(1);
+    expect(host.snapshot().privateRefs).toHaveLength(2);
+    const { loadDirectories } = await import("@/lib/directories");
+    const project = loadDirectories().find(p => p.id === host.snapshot().roomHeroes[0].directoryId);
+    expect(project?.roomKey).toBe(host.snapshot().session!.localRoomId!);
+    const { blob } = await host.exportArchive();
+    const exported = JSON.parse(await (await JSZip.loadAsync(await readBlob(blob))).file("salle.json")!.async("string"));
+    expect(exported.projectName).toBe("Imported film");
+    expect(exported.heroes[0].linkedResources[0].id).toBe(exported.resources[0].item.id);
+    const localId = host.snapshot().session.localRoomId;
+    await player.leave(); await host.leave();
+    await host.resumeLocalRoom(localId);
+    expect(host.snapshot().projectName).toBe("Imported film");
+    expect(host.snapshot().roomHeroes).toHaveLength(1);
+  });
   it("synchronise fiches, chat, murmures et jets, puis exporte une véritable archive du site", async () => {
     vi.stubGlobal("RTCPeerConnection", MemoryPeer);
     const world = new FakeRodeo();

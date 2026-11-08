@@ -70,6 +70,7 @@ const empty = {
   relayConfigured: false,
 };
 export const commands = new Set([
+  "importProject",
   "setRoomTitle",
   "linkSiteRoom",
   "unlinkSiteRoom",

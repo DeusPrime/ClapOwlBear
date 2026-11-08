@@ -1,4 +1,4 @@
-# CLAP! pour Owlbear Rodeo — 0.2.2
+# CLAP! pour Owlbear Rodeo — 0.2.3
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
@@ -78,3 +78,5 @@ Les tests utilisent le vrai moteur et trois participants simulés : attribution,
 Ces tests simulent le transport RTC. Une validation dans une vraie salle Owlbear avec plusieurs navigateurs reste nécessaire ; aucun test réel de connexion sur des réseaux distincts n’a encore été effectué. Les parties locales utilisent STUN et n’ajoutent pas de relais TURN : certains réseaux peuvent empêcher une connexion WebRTC directe. Une salle liée reprend les serveurs ICE/TURN fournis par l’API du site. Les quotas de stockage et la mémoire du navigateur restent applicables.
 
 Le workflow GitHub Actions compile, teste, vérifie les fichiers et publie GitHub Pages à chaque push sur `main`.
+
+Le MJ importe son projet .clapStudio directement dans la salle, depuis le panneau de preparation. Les heros et cartes alimentent automatiquement la reserve de la salle. Une sauvegarde .clapSalle preparee se reprend sans reimport.

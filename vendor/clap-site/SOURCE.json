@@ -1,6 +1,6 @@
 {
   "source": "DeusPrime/clap-cinematic-quest",
-  "syncedAt": "2026-11-08T11:17:53.019Z",
+  "syncedAt": "2026-11-08T12:43:54.725Z",
   "adaptations": [
     "zod/v3 compatibility",
     "GitHub Pages asset paths",
@@ -395,7 +395,7 @@
     ],
     [
       "vendor/clap-site/src/components/RoomMJWorkspace.tsx",
-      "9b793cee8c33853a29e2c55c60c05b7cb5cca3a7662cca93da489b5db8703a35"
+      "d9a6688d303f83704826c92baf892330d7dba6b73412dcdb270f9ba32829dcf3"
     ],
     [
       "vendor/clap-site/src/components/RoomPlayersBoard.tsx",
@@ -408,6 +408,10 @@
     [
       "vendor/clap-site/src/components/RoomPrivateResources.tsx",
       "a3c56c7a605a80d752bf884fd06da372424aa731069c531c1daa09f911b0c60c"
+    ],
+    [
+      "vendor/clap-site/src/components/RoomProjectImport.tsx",
+      "9d5ec33d6cfda8f32b9defb936f2fbc5f6e943c866646c5653665da0030cf256"
     ],
     [
       "vendor/clap-site/src/components/RoomResourceView.tsx",
@@ -1067,11 +1071,11 @@
     ],
     [
       "vendor/clap-site/src/lib/roomArchive.ts",
-      "c25505dc086e774c624f398880c9683a8c55457f796db412837e01acbfcb5349"
+      "0aa95e7fb7059bcd67e3202cdc3ca134c2e9ac396972bd442f8eab65f62b6f4e"
     ],
     [
       "vendor/clap-site/src/lib/roomClient.ts",
-      "841e8215e39ff50a2db5cc071a5f0b60000826b199ca96a32b26d8cb1c7320d9"
+      "ef48936e53d9a9ecb68c12d51841ac9727242a90fa133c224a4bf79e41fba162"
     ],
     [
       "vendor/clap-site/src/lib/roomNickname.ts",
@@ -1103,7 +1107,7 @@
     ],
     [
       "vendor/clap-site/src/lib/studioImport.ts",
-      "b6eee139a23ff239d67ee4ddd31756947397fca21cf8bb6722caaa0aca88847f"
+      "20ce3ebf821eae69113557e503b861653924a617782ac69616129f6c3c0c5215"
     ],
     [
       "vendor/clap-site/src/lib/studioProject.ts",
@@ -1311,7 +1315,7 @@
     ],
     [
       "vendor/clap-site/src/test/setup.ts",
-      "04f2798b91d274d3a353c678412ff265cd9c45345090808925f13c8d55408049"
+      "264878698a61750da590080a33ddda0a140f4577650d79e50080a421871564f4"
     ],
     [
       "vendor/clap-site/src/vite-env.d.ts",

@@ -78,8 +78,6 @@ export function validateStudioImport(value: unknown) {
 export async function readStudioArchive(bytes: ArrayBuffer) {
   try {
     const zip = await JSZip.loadAsync(bytes);
-    const entries = Object.values(zip.files);
-
     const file = zip.file("studio.json");
     if (!file) throw new Error("Le fichier studio.json est absent.");
     const json = await file.async("string");
@@ -101,22 +99,31 @@ function availableName(original: string) {
   }
 }
 
-export async function importStudioArchive(bytes: ArrayBuffer, onProgress: (message: string) => void = () => {}) {
+export async function importStudioArchive(bytes: ArrayBuffer, onProgress: (message: string) => void = () => {}, options: { directoryId?: string; maxHeroes?: number; maxResources?: number; maxEntries?: number } = {}) {
   onProgress("Vérification du projet…");
   const snapshot = await readStudioArchive(bytes);
   // Validate the entire archive before creating any data. Every imported record gets a new identity.
-  const project = createDirectory(availableName(snapshot.project.name));
+  if (snapshot.heroes.length > (options.maxHeroes ?? Infinity) || snapshot.resources.length > (options.maxResources ?? Infinity)) throw new Error('Le projet dépasse la capacité restante de la salle (100 héros et 500 cartes).');
+  if (snapshot.heroes.length + snapshot.resources.length > (options.maxEntries ?? Infinity)) throw new Error('La salle ne peut pas contenir plus de 500 cartes et héros.');
+  const target = options.directoryId ? loadDirectories().find(project => project.id === options.directoryId && project.roomKey) : undefined;
+  if (options.directoryId && !target) throw new Error('Projet de salle introuvable.');
+  const project = target || createDirectory(availableName(snapshot.project.name));
+  const heroIds: string[] = [];
+  const resourceRefs: { type: typeof snapshot.resources[number]['type']; id: string }[] = [];
   const cleanup: (() => Promise<unknown>)[] = [];
   let unresolvedLinks = 0;
   try {
-    updateDirectoryBack(project.id, snapshot.project);
-    updateDirectoryPoster(project.id, snapshot.project.posterImage, snapshot.project.posterEditing);
+    if (!target) {
+      updateDirectoryBack(project.id, snapshot.project);
+      updateDirectoryPoster(project.id, snapshot.project.posterImage, snapshot.project.posterEditing);
+    }
     const resourceIds = new Map<string, string>();
     for (const resource of snapshot.resources) resourceIds.set(`${resource.type}:${resource.item.id}`, crypto.randomUUID());
     for (const [index, resource] of snapshot.resources.entries()) {
       onProgress(`Carte ${index + 1}/${snapshot.resources.length}`);
       const store = resourceStores[resource.type];
       const item = { ...resource.item, id: resourceIds.get(`${resource.type}:${resource.item.id}`)!, directoryId: project.id };
+      resourceRefs.push({ type: resource.type, id: item.id });
       cleanup.push(() => store.remove(item.id));
       // Dispatching the discriminated resource store preserves each resource's validated fields.
       switch (resource.type) {
@@ -130,6 +137,7 @@ export async function importStudioArchive(bytes: ArrayBuffer, onProgress: (messa
     for (const [index, hero] of snapshot.heroes.entries()) {
       onProgress(`Héros ${index + 1}/${snapshot.heroes.length}`);
       const id = crypto.randomUUID();
+      heroIds.push(id);
       const linkedResources = hero.linkedResources.flatMap(link => {
         const mapped = resourceIds.get(`${link.type}:${link.id}`);
         if (!mapped) { unresolvedLinks++; return []; }
@@ -146,12 +154,12 @@ export async function importStudioArchive(bytes: ArrayBuffer, onProgress: (messa
       await saveToolDocument({ ...tool, id, directoryId: project.id, data } as ToolDocument);
     }
     selectDirectory(project.id);
-    return { project, heroes: snapshot.heroes.length, resources: snapshot.resources.length, tools: snapshot.tools.length, unresolvedLinks };
+    return { project, sourceName: snapshot.project.name, heroIds, resourceRefs, heroes: snapshot.heroes.length, resources: snapshot.resources.length, tools: snapshot.tools.length, unresolvedLinks };
   } catch (cause) {
     const rolledBack = [];
     for (const remove of cleanup.reverse()) { try { await remove(); rolledBack.push(true); } catch { rolledBack.push(false); } }
     if (rolledBack.every(Boolean)) {
-      try { removeDirectory(project.id); } catch { throw new Error(`Import interrompu. Le projet « ${project.name} » est incomplet ; les projets existants sont conservés.`); }
+      try { if (!target) removeDirectory(project.id); } catch { throw new Error(`Import interrompu. Le projet « ${project.name} » est incomplet ; les projets existants sont conservés.`); }
       throw new Error(`Import annulé ; les projets existants sont conservés. ${cause instanceof Error ? cause.message : "Stockage indisponible."}`);
     }
     throw new Error(`Import interrompu. Des données partielles restent dans « ${project.name} » ; les projets existants sont conservés.`);

@@ -70,7 +70,7 @@ it("monte les vrais composants MJ du site dans le panneau sans service de compte
   await act(async () => {
     root = mount();
   });
-  expect(document.body.textContent).toContain("Mes cartes de salle");
+  expect(document.body.textContent).toContain("Importe ton projet pour commencer");
   expect(document.body.textContent).toContain("Discussion");
   expect(document.body.textContent).toContain("Partie Owlbear");
   expect(

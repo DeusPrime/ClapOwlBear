@@ -18,6 +18,7 @@ const API = (import.meta.env.VITE_ROOM_API_URL || "/api/rooms").replace(/\/$/, "
 const STORAGE = "clap-room-session-v1";
 type Peer = { pc: RTCPeerConnection; transport?: RoomTransport; connection: string; instance: string; started: number; sheet: string; assignment?: string; resources?: Map<string, string> };
 type Snapshot = {
+  projectName?: string;
   availableHeroes?: { id: string; name: string; ownerId?: string }[];
   roomHeroes: Character[];
   heroProposals: (Extract<RoomMessage, { kind?: 'hero-proposal' }> & { playerId: string })[];
@@ -81,11 +82,35 @@ export class RoomClient {
       sheets: Object.fromEntries(Object.entries({ ...this.archive.sheets, ...this.state.sheets }).slice(-16)) as RoomArchive['sheets'],
       sheetResources: Object.fromEntries(Object.entries({ ...this.archive.sheetResources, ...this.state.sheetResources }).slice(-16)) as RoomArchive['sheetResources'] };
     this.archive = record;
-    this.update({ savedSheets: record.sheets, savedSheetResources: record.sheetResources });
+    this.update({ projectName: record.projectName, savedSheets: record.sheets, savedSheetResources: record.sheetResources });
     this.persistence = this.persistence.catch(() => {}).then(() => saveLocalRoom(record));
     void this.persistence.catch(() => this.update({ error: 'La sauvegarde locale a échoué. Exporte ta salle avant de fermer.' }));
   }
   setPrivateRefs(privateRefs: PrivateRoomRef[]) { this.update({ privateRefs }); this.persist(); }
+  private importingProject = false;
+  async importProject(bytes: ArrayBuffer) {
+    const session = this.state.session, archive = this.archive;
+    if (session?.role !== 'mj' || !archive) throw new Error('Import réservé au MJ.');
+    if (this.importingProject) throw new Error('Un import de projet est déjà en cours.');
+    this.importingProject = true;
+    try {
+    const directory = ensureRoomProject(archive.id, archive.title);
+    const { importStudioArchive } = await import('./studioImport');
+    const result = await importStudioArchive(bytes, () => {}, { directoryId: directory.id, maxHeroes: 100 - archive.heroes.length, maxResources: 500 - archive.resources.length, maxEntries: 500 - this.state.privateRefs.length });
+    if (this.archive?.id !== archive.id || this.state.session?.id !== session.id) throw new Error('La salle a changé. Le projet importé reste disponible sur cet appareil.');
+    const heroes = (await Promise.all(result.heroIds.map(id => getCharacter(id)))).filter((hero): hero is Character => Boolean(hero));
+    const resources = (await (await import('./resourceBundle')).loadAllBundledResources()).filter(resource => result.resourceRefs.some(ref => ref.type === resource.type && ref.id === resource.item.id));
+    const refs = [...this.state.privateRefs, ...heroes.map(hero => ({ type: 'hero' as const, id: hero.id })), ...result.resourceRefs];
+    this.archive = { ...this.archive, projectName: result.sourceName, heroes: [...this.archive.heroes, ...heroes.map(hero => roomCharacterSchema.parse({ ...hero, portrait: hero.portrait || undefined }))], resources: [...this.archive.resources, ...resources.map(transferableRoomResource)] };
+    this.update({ projectName: result.sourceName });
+    this.setPrivateRefs(refs);
+    this.publishGame();
+    await this.persistence;
+    window.dispatchEvent(new Event('clap-room-character-assigned'));
+    window.dispatchEvent(new Event('focus'));
+    return { name: result.sourceName, heroes: result.heroes, resources: result.resources, tools: result.tools };
+    } finally { this.importingProject = false; }
+  }
   async addRoomHero(source: Character, resources?: BundledResource[]) {
     const key = `${this.archive?.id}:${source.id}`;
     const pending = this.addingHeroes.get(key);
@@ -228,7 +253,7 @@ export class RoomClient {
       const poll = await this.api<RoomPoll>('/poll', { since: 0, instance: crypto.randomUUID() }, session);
       this.archive = session.localRoomId ? await loadLocalRoom(session.localRoomId) : undefined;
       this.game = this.archive?.game || emptyGame();
-      this.update({ privateRefs: this.archive?.privateRefs || [], savedSheets: this.archive?.sheets || {}, savedSheetResources: this.archive?.sheetResources || {} });
+      this.update({ projectName: this.archive?.projectName, privateRefs: this.archive?.privateRefs || [], savedSheets: this.archive?.sheets || {}, savedSheetResources: this.archive?.sheetResources || {} });
       this.save(session); this.applyRoomPoll(poll); this.publishGame(); this.start();
     } catch (cause) {
       if ((cause as { status?: number }).status === 401) forgetOwnedRoom(code);
@@ -262,7 +287,7 @@ export class RoomClient {
       if (archive && archive.hostId !== session.id) this.game = { ...this.game, messages: this.game.messages.map(message => ({ ...message,
         sender: message.sender === archive.hostId ? session.id : message.sender,
         privateTo: message.privateTo === archive.hostId ? session.id : message.privateTo })) };
-      this.update({ exitNotice: undefined, roomInfo: { title: archive?.title || options.title || '', locked: Boolean(options.password) }, privateRefs: archive?.privateRefs || [], savedSheets: archive?.sheets || {}, savedSheetResources: archive?.sheetResources || {}, messages: [], requests: [], sheets: {}, sheetResources: {} });
+      this.update({ exitNotice: undefined, projectName: archive?.projectName, roomInfo: { title: archive?.title || options.title || '', locked: Boolean(options.password) }, privateRefs: archive?.privateRefs || [], savedSheets: archive?.sheets || {}, savedSheetResources: archive?.sheetResources || {}, messages: [], requests: [], sheets: {}, sheetResources: {} });
       this.save({ ...session, characterId, ...(archive ? { localRoomId: archive.id } : {}) });
       if (archive) rememberRoomSettings(archive.id, options.password);
       this.publishGame();
@@ -277,7 +302,7 @@ export class RoomClient {
         this.archive = session.localRoomId ? await loadLocalRoom(session.localRoomId) : undefined;
         if (!this.stopped) return;
         this.game = this.archive?.game || emptyGame();
-        this.update({ privateRefs: this.archive?.privateRefs || [], savedSheets: this.archive?.sheets || {}, savedSheetResources: this.archive?.sheetResources || {} });
+        this.update({ projectName: this.archive?.projectName, privateRefs: this.archive?.privateRefs || [], savedSheets: this.archive?.sheets || {}, savedSheetResources: this.archive?.sheetResources || {} });
         rememberRoomNickname(session.room, session.name);
         rememberOwnedRoom(session);
         this.update({ session }); this.publishGame(); this.start();
@@ -355,7 +380,7 @@ export class RoomClient {
     catch (error) { if ((error as { status?: number }).status !== 401) throw error; }
     this.forget();
   }
-  private forget() { const code = this.state.session?.room; this.stop(); if (code) forgetOwnedRoom(code); sessionStorage.removeItem(STORAGE); this.update({ session: null, error: "" }); }
+  private forget() { const code = this.state.session?.room; this.stop(); if (code) forgetOwnedRoom(code); sessionStorage.removeItem(STORAGE); this.update({ session: null, projectName: undefined, error: "" }); }
   async assignCharacter(playerId: string, characterId: string) {
     const session = this.state.session;
     const member = this.state.members.find(member => member.id === playerId && member.role === 'player');
@@ -537,7 +562,7 @@ export class RoomClient {
       for (const id of [...this.peers.keys()]) this.closePeer(id);
       this.assignments.clear(); this.publicHeroes.clear();
       this.persist();
-      this.update({ sheetResources: {}, sheets: {}, privateRefs: [], savedSheets: {}, savedSheetResources: {} });
+      this.update({ projectName: undefined, sheetResources: {}, sheets: {}, privateRefs: [], savedSheets: {}, savedSheetResources: {} });
     }
     if (role !== this.state.session.role) this.save({ ...this.state.session, role });
     this.iceServers = poll.iceServers;

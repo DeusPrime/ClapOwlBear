@@ -15,6 +15,7 @@ export const roomArchiveSchema = z.object({
   format: z.literal('clapSalle'), version: z.literal(1), id: z.string().uuid(), title: z.string().trim().min(1).max(80),
   updatedAt: z.number().finite().nonnegative(), hostId: z.string().max(100), hostName: z.string().max(40),
   posterImage: rasterImageSchema.optional(), posterEditing: imageEditingSchema.optional(),
+  projectName: z.string().min(1).max(80).optional(),
   game: localGameSchema, privateRefs: z.array(privateRefSchema).max(500),
   heroes: z.array(roomCharacterSchema).max(100), resources: z.array(roomResourceSchema).max(500),
   heroSources: z.record(z.string().max(100), z.string().max(100)).optional(),
