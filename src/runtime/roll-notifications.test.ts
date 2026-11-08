@@ -18,3 +18,17 @@ it('notifies public rolls outside the popover once, without replaying history or
   expect(show).toHaveBeenCalledTimes(2);
   stop();
 });
+it('does not replay recent dice while a project reset updates the session before clearing its history', () => {
+  let listener = () => {};
+  const roll = { id: 9, sender: 'gm', name: 'MJ', role: 'mj' as const, text: 'D6 : 4', kind: 'roll' as const, created: 101 };
+  let state = { session: { room: 'same', gameGeneration: 'old' }, messages: [roll] };
+  const show = vi.fn(async () => 'notification');
+  const stop = watchPublicRolls({ snapshot: () => state, subscribe: fn => { listener = fn; return () => {}; } }, show, 100);
+  expect(show).toHaveBeenCalledTimes(1);
+  state = { ...state, session: { ...state.session, gameGeneration: 'new' } }; listener();
+  state = { ...state, messages: [] }; listener();
+  expect(show).toHaveBeenCalledTimes(1);
+  state = { ...state, messages: [{ ...roll, id: 10, created: 102 }] }; listener();
+  expect(show).toHaveBeenCalledTimes(2);
+  stop();
+});

@@ -5,7 +5,8 @@ export function watchPublicRolls(client: { snapshot: () => Snapshot; subscribe: 
   const seen = new Set<number>();
   const update = () => {
     const snapshot = client.snapshot();
-    const scope = snapshot.session ? snapshot.session.room + ':' + (snapshot.session.gameGeneration || '') : undefined;
+    // Roll IDs stay unique across project resets; preserve deduplication while the session is updated before its history is cleared.
+    const scope = snapshot.session?.room;
     if (room !== scope) { room = scope; previous = undefined; seen.clear(); }
     if (!room || snapshot.messages === previous) return;
     previous = snapshot.messages;
