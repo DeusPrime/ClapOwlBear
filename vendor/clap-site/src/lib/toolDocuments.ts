@@ -79,17 +79,17 @@ export async function portableToolPayload(data: ToolPayload): Promise<ToolPayloa
   if (copy.tool === "a4-sheets" && copy.settings.backImage) copy.settings.backImage = await portableImage(copy.settings.backImage);
   return copy;
 }
-export async function saveToolDocument(document: ToolDocument) {
+export async function saveToolDocument(document: ToolDocument, options: { prepareRenders?: boolean } = {}) {
   if (!document.name.trim() || document.name.length > 120) throw new Error("Le nom doit contenir entre 1 et 120 caractères.");
   if (document.data && document.data.tool !== document.kind) throw new Error("Le type de la ressource ne correspond pas à ses données.");
   const saved: ToolDocument = { ...document, name: document.name.trim(), data: document.data ? await portableToolPayload(document.data) : null };
-  if (saved.data?.tool === "book-background") {
+  if (options.prepareRenders !== false && saved.data?.tool === "book-background") {
     for (const image of saved.data.images) await prepareBookImage(image, saved.data.settings.strength);
   }
-  if (saved.data?.tool === "a4-sheets") {
+  if (options.prepareRenders !== false && saved.data?.tool === "a4-sheets") {
     for (const image of saved.data.images) await prepareA4Image(image);
   }
-  if (saved.preview === undefined) {
+  if (options.prepareRenders !== false && saved.preview === undefined) {
     if (!saved.data?.images.length) saved.preview = null;
     else {
       try { saved.preview = await (await import("./toolOutput")).renderToolPreview(saved); }

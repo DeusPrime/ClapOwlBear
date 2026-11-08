@@ -171,7 +171,8 @@ export class RoomClient {
     try {
       const directory = ensureRoomProject(id, archive.title);
       const { importStudioArchive } = await import('./studioImport');
-      const result = await importStudioArchive(bytes, () => {}, { directoryId: directory.id, copyAppearance: true, maxHeroes: 100, maxResources: 500, maxEntries: 500 });
+      const progress = (message: string) => window.dispatchEvent(new CustomEvent('clap-room-import-progress', { detail: { message } }));
+      const result = await importStudioArchive(bytes, progress, { directoryId: directory.id, copyAppearance: true, maxHeroes: 100, maxResources: 500, maxEntries: 500 });
       const heroes = (await Promise.all(result.heroIds.map(heroId => getCharacter(heroId)))).filter((hero): hero is Character => Boolean(hero));
       const resources = (await (await import('./resourceBundle')).loadAllBundledResources()).filter(resource => result.resourceRefs.some(ref => ref.type === resource.type && ref.id === resource.item.id));
       const refs = [...heroes.map(hero => ({ type: 'hero' as const, id: hero.id })), ...result.resourceRefs];
@@ -180,6 +181,7 @@ export class RoomClient {
       const fresh: RoomArchive = { format: 'clapSalle', version: 1, id, gameGeneration: id, title: archive.title, hostId: session.id, hostName: session.name, updatedAt: Date.now(), owlbearUrl: archive.owlbearUrl,
         projectName: result.sourceName, projectId, projectLinks: { [projectId]: { name: result.sourceName, refs } }, game, privateRefs: refs,
         heroes: heroes.map(hero => roomCharacterSchema.parse({ ...hero, portrait: hero.portrait || undefined })), resources: resources.map(transferableRoomResource), sheets: {}, sheetResources: {} };
+      progress('Enregistrement de la nouvelle salle…');
       await saveLocalRoom(fresh);
       await this.persistence;
       if (this.archive?.id !== archive.id || this.state.session?.id !== session.id || this.state.session.role !== 'mj') throw new Error('La salle a change. Reessaie.');
@@ -190,6 +192,7 @@ export class RoomClient {
       rememberRoomSettings(id, roomSettings(archive.id).password);
       this.publishGame(); await this.persistence; committed = true;
       await (await import('./roomArchive')).deleteLocalRoom(archive.id);
+      progress('Nettoyage de l’ancienne progression…');
       await removeRoomCopies(archive.id);
       window.dispatchEvent(new Event('clap-room-character-assigned'));
       window.dispatchEvent(new Event('focus'));

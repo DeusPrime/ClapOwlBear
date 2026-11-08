@@ -152,7 +152,7 @@ export async function importStudioArchive(bytes: ArrayBuffer, onProgress: (messa
       const id = crypto.randomUUID();
       const data = tool.data ? { ...tool.data, images: tool.data.images.map(image => ({ ...image, id: crypto.randomUUID() })) } as ToolPayload : null;
       cleanup.push(() => deleteToolDocument(id));
-      await saveToolDocument({ ...tool, id, directoryId: project.id, data } as ToolDocument);
+      await saveToolDocument({ ...tool, id, directoryId: project.id, data } as ToolDocument, { prepareRenders: false });
     }
     selectDirectory(project.id);
     return { project, sourceName: snapshot.project.name, heroIds, resourceRefs, heroes: snapshot.heroes.length, resources: snapshot.resources.length, tools: snapshot.tools.length, unresolvedLinks };

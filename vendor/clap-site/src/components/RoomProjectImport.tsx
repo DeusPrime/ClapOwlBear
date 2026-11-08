@@ -11,6 +11,12 @@ export default function RoomProjectImport({ management = false, onComplete }: { 
   const room = useRoom();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [progress, setProgress] = useState('');
+  useEffect(() => {
+    const update = (event: Event) => { const message = (event as CustomEvent).detail?.message; if (typeof message === 'string') setProgress(message); };
+    window.addEventListener('clap-room-import-progress', update);
+    return () => window.removeEventListener('clap-room-import-progress', update);
+  }, []);
   const [directories, setDirectories] = useState(loadDirectories);
   const [selected, setSelected] = useState('');
   const [pending, setPending] = useState<Choice | null>(null);
@@ -24,7 +30,7 @@ export default function RoomProjectImport({ management = false, onComplete }: { 
   const projects = directories.filter(project => !project.roomKey);
   async function confirm() {
     if (!pending) return;
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setProgress('Transmission du projet au moteur de salle…');
     try {
       if (pending.type === 'file') {
         if (!/\.clapstudio$/i.test(pending.file.name)) throw new Error('Choisis un fichier .clapStudio.');
@@ -44,6 +50,7 @@ export default function RoomProjectImport({ management = false, onComplete }: { 
     <Button type="button" variant="outline" disabled={busy} onClick={() => input.current?.click()}><Upload size={16} className="mr-2" />Importer un projet .clapStudio</Button>
     <p className="text-sm text-muted-foreground">Le nouveau projet sera copié dans une salle propre. La progression de la partie actuelle ne sera pas conservée.</p>
     <AlertDialog open={Boolean(pending)} onOpenChange={open => { if (!open && !busy) setPending(null); }}><AlertDialogContent className="bg-paper"><AlertDialogHeader><AlertDialogTitle>Changer de projet et remettre la salle à zéro ?</AlertDialogTitle><AlertDialogDescription>Toute la progression en cours sera définitivement supprimée : héros attribués, blessures, inventaires, cartes, PV, discussion et jets. La salle repartira de zéro avec le projet « {pending?.name} ». Le projet d’origine est conservé.</AlertDialogDescription></AlertDialogHeader>
+      {busy && <p role="status" aria-live="polite" className="text-sm">{progress || "Import en cours…"}</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <AlertDialogFooter><AlertDialogCancel disabled={busy}>Annuler</AlertDialogCancel><AlertDialogAction disabled={busy} className="bg-destructive text-destructive-foreground" onClick={event => { event.preventDefault(); void confirm(); }}>{busy ? 'Remise à zéro…' : 'Confirmer et remettre à zéro'}</AlertDialogAction></AlertDialogFooter>
     </AlertDialogContent></AlertDialog>

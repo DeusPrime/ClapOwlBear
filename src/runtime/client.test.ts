@@ -104,3 +104,47 @@ it('keeps card image data and library refreshes out of chat-only updates', async
   expect(focus).not.toHaveBeenCalled();
   window.removeEventListener('focus', focus); monitor.close();
 });
+class LocalBus {
+  static peers = new Set<LocalBus>();
+  onmessage?: (event: { data: any }) => void;
+  constructor(public name: string) { LocalBus.peers.add(this); }
+  postMessage(data: unknown) { for (const peer of LocalBus.peers) if (peer !== this && peer.name === this.name) peer.onmessage?.({ data: structuredClone(data) }); }
+  close() { LocalBus.peers.delete(this); }
+}
+it('keeps an acknowledged import alive beyond two minutes, forwards progress and returns its real result', async () => {
+  vi.useFakeTimers(); vi.stubGlobal('BroadcastChannel', LocalBus);
+  let complete!: (value: unknown) => void;
+  const engine = { snapshot: () => ({ session: { role: 'mj' } }), subscribe: () => () => {}, importProject: () => new Promise(resolve => { complete = resolve; }) };
+  const channel = 'long-import'; stop = serveRoomClient(engine, channel);
+  configureRuntime({ background: false, channel });
+  const ui = sharedRoomClient(() => engine);
+  const progress = vi.fn((event: Event) => (event as any).clapIpcEvent === 'background' && (event as CustomEvent).detail.message);
+  window.addEventListener('clap-room-import-progress', progress);
+  try {
+    const operation = ui.importProject(); let finished = false; operation.then(() => { finished = true; });
+    window.dispatchEvent(new CustomEvent('clap-room-import-progress', { detail: { message: 'Carte 45/100' } }));
+    await vi.advanceTimersByTimeAsync(155000);
+    expect(finished).toBe(false);
+    expect(progress.mock.results.some(result => result.value === 'Carte 45/100')).toBe(true);
+    complete({ name: 'Silverlake' });
+    await expect(operation).resolves.toEqual({ name: 'Silverlake' });
+    await vi.advanceTimersByTimeAsync(130000);
+  } finally { window.removeEventListener('clap-room-import-progress', progress); window.dispatchEvent(new Event('pagehide')); stop?.(); stop = undefined; vi.useRealTimers(); }
+});
+it('reports a missing engine promptly instead of waiting two minutes for an unacknowledged command', async () => {
+  vi.useFakeTimers(); vi.stubGlobal('BroadcastChannel', LocalBus);
+  configureRuntime({ background: false, channel: 'absent-engine' });
+  const ui = sharedRoomClient(() => ({ importProject: async () => {} }));
+  try {
+    const failure = expect(ui.importProject()).rejects.toThrow('ne répond plus');
+    await vi.advanceTimersByTimeAsync(20001); await failure;
+  } finally { window.dispatchEvent(new Event('pagehide')); vi.useRealTimers(); }
+});
+it('forwards an import failure immediately after acknowledgement', async () => {
+  vi.stubGlobal('BroadcastChannel', LocalBus);
+  const engine = { snapshot: () => ({}), subscribe: () => () => {}, importProject: async () => { throw new Error('Archive invalide QA'); } };
+  stop = serveRoomClient(engine, 'failed-import');
+  configureRuntime({ background: false, channel: 'failed-import' });
+  const ui = sharedRoomClient(() => engine);
+  await expect(ui.importProject()).rejects.toThrow('Archive invalide QA');
+});

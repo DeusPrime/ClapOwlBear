@@ -119,19 +119,21 @@ export function sharedRoomClient<T extends object>(factory: () => T): T {
       resolve: (v: unknown) => void;
       reject: (e: Error) => void;
       timer: ReturnType<typeof setTimeout>;
+      method: string;
     }
   >();
+  const armTimeout = (id: string, delay: number) => setTimeout(() => {
+    const job = pending.get(id);
+    if (!job) return;
+    pending.delete(id);
+    job.reject(new Error("Le moteur Owlbear ne répond plus. Recharge la salle avant de réessayer."));
+  }, delay);
   const request = (method: string, args: unknown[]) =>
     new Promise<any>((resolve, reject) => {
       const id = crypto.randomUUID();
-      const timer = setTimeout(() => {
-        pending.delete(id);
-        reject(
-          new Error("Le moteur de salle ne répond pas. Recharge Owlbear."),
-        );
-      }, 120000);
-      pending.set(id, { resolve, reject, timer });
-      bus.postMessage({ type: "command", id, method, args });
+      pending.set(id, { resolve, reject, method, timer: armTimeout(id, 20000) });
+      try { bus.postMessage({ type: "command", id, method, args }); }
+      catch (error) { clearTimeout(pending.get(id)!.timer); pending.delete(id); reject(error); }
     });
   let viewReady = false;
   const heldRewards = new Map<string, any>();
@@ -171,6 +173,13 @@ export function sharedRoomClient<T extends object>(factory: () => T): T {
     ) {
       if (data.name === "clap-room-reward" && !viewReady && data.id) heldRewards.set(data.id, data);
       else deliver(data);
+    }
+    if (data?.type === "command-active") {
+      const job = pending.get(data.id);
+      if (!job) return;
+      clearTimeout(job.timer);
+      job.timer = armTimeout(data.id, 120000);
+      if (typeof data.message === "string") window.dispatchEvent(markEvent("clap-room-import-progress", { message: data.message }, "background"));
     }
     if (data?.type === "result") {
       const job = pending.get(data.id);
@@ -266,6 +275,8 @@ export function serveRoomClient(
   };
   const unsubscribe = client.subscribe(publish);
   window.addEventListener("clap-integration-state", publish);
+  const activeTimers = new Set<ReturnType<typeof setInterval>>();
+  let closed = false;
   bus.onmessage = ({ data }) => {
     void (async () => {
       if (data?.type === "hello") {
@@ -298,6 +309,15 @@ export function serveRoomClient(
         !Array.isArray(data.args)
       )
         return;
+      const active = (message?: string) => { if (!closed) bus.postMessage({ type: "command-active", id: data.id, message }); };
+      active();
+      const heartbeat = setInterval(() => active(), 5000);
+      activeTimers.add(heartbeat);
+      const importing = data.method === "importProject" || data.method === "useProject";
+      const progress = (event: Event) => {
+        if (importing && !(event as Event & { clapIpcEvent?: string }).clapIpcEvent) active((event as CustomEvent).detail?.message);
+      };
+      window.addEventListener("clap-room-import-progress", progress);
       try {
         const value = await client[data.method](...data.args);
         await onMutation?.();
@@ -309,11 +329,16 @@ export function serveRoomClient(
           id: data.id,
           error: error instanceof Error ? error.message : "Action impossible.",
         });
+      } finally {
+        clearInterval(heartbeat); activeTimers.delete(heartbeat);
+        window.removeEventListener("clap-room-import-progress", progress);
       }
     })();
   };
   publish();
   return () => {
+    closed = true;
+    for (const timer of activeTimers) clearInterval(timer);
     unsubscribe();
     window.removeEventListener("clap-integration-state", publish);
     window.removeEventListener("clap-room-reward", forward);

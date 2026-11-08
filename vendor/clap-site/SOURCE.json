@@ -1,6 +1,6 @@
 {
   "source": "DeusPrime/clap-cinematic-quest",
-  "syncedAt": "2026-11-08T18:26:56.202Z",
+  "syncedAt": "2026-11-08T18:54:17.353Z",
   "adaptations": [
     "zod/v3 compatibility",
     "GitHub Pages asset paths",
@@ -419,7 +419,7 @@
     ],
     [
       "vendor/clap-site/src/components/RoomProjectImport.tsx",
-      "73228a771a01e2ad6b0662bffdebf2bd875451192bc7112b6d5a7e058dbc6fd8"
+      "fdf9d67cdff24b51d1012515392b3927cf00daddb8f9287e471a53c5ff06e9f0"
     ],
     [
       "vendor/clap-site/src/components/RoomResourceView.tsx",
@@ -1091,7 +1091,7 @@
     ],
     [
       "vendor/clap-site/src/lib/roomClient.ts",
-      "844c106c77fb7b38db9278c239da4d980c8682341960669874f446f4801d07d3"
+      "36fe97eda3d414280471841ac4783ccbf6b62ef8c406fc5f5d22a33c01c4d8be"
     ],
     [
       "vendor/clap-site/src/lib/roomInventoryChanges.ts",
@@ -1127,7 +1127,7 @@
     ],
     [
       "vendor/clap-site/src/lib/studioImport.ts",
-      "1f6184b411eeda67c7152b9ef53f53b78253d97880d2e8bd5b04a5a7bcd1b1fa"
+      "86834b02fd6f50937ed99ce2d330f0b650715e42c685e1bf9196b4e27f5729ff"
     ],
     [
       "vendor/clap-site/src/lib/studioProject.ts",
@@ -1147,7 +1147,7 @@
     ],
     [
       "vendor/clap-site/src/lib/toolDocuments.ts",
-      "73ba216302641444e4e01eb930e1482cb625742a3b94322d38b504f35beb60f6"
+      "c209986a7235bf5152a361893181e0cf09b7d11498ea4d8dace2ac73b27818fb"
     ],
     [
       "vendor/clap-site/src/lib/toolOutput.ts",
