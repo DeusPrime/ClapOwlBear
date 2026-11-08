@@ -63,7 +63,7 @@ describe("Moteur CLAP! partagé — MJ et joueurs", () => {
     const exported = JSON.parse(await (await JSZip.loadAsync(await readBlob(blob))).file("salle.json")!.async("string"));
     expect(exported.projectName).toBe("Imported film");
     expect(exported.heroes[0].linkedResources[0].id).toBe(exported.resources[0].item.id);
-    const localId = host.snapshot().session.localRoomId;
+    const localId = host.snapshot().session!.localRoomId!;
     await player.leave(); await host.leave();
     await host.resumeLocalRoom(localId);
     expect(host.snapshot().projectName).toBe("Imported film");
