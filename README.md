@@ -39,6 +39,8 @@ npm.cmd ci
 ## Fonctions actuelles
 
 - Lecture de l’archive ZIP `studio.json` exportée par le site ; vérification du format, de la version, des identifiants et de l’appartenance au projet.
+- Onglet Projet réservé au MJ, masqué pour les joueurs, y compris après un changement de rôle. Ce contrôle concerne la vue : le partage explicite transmet toujours toutes les données comme indiqué ci-dessous.
+- Identité visuelle du site CLAP & Role : papier texturé, encre noire, accent bleu, Courier Prime, Anton, Special Elite et couleurs des facettes. Icône officielle reprise du SVG du site.
 - Dossier de projet **dans le panneau CLAP!**, héros, ressources et documents consultables. Les données non encore mises en page apparaissent avec leurs libellés techniques.
 - Consultation des facettes et compétences des personnages ; association au compte du joueur par métadonnées Owlbear.
 - Discussion en direct et jets génériques `NdF`, `NdF+bonus`, `NdF-bonus`, partagés dans la discussion.
@@ -53,7 +55,7 @@ npm.cmd ci
 - Prototype non encore validé dans une salle réelle à plusieurs joueurs. Compilation et tests unitaires ne remplacent pas cet essai.
 - Le panneau doit rester ouvert pour recevoir le chat ou un projet. Les retardataires doivent demander un nouveau partage au MJ. Les messages manqués ne sont pas récupérés.
 - Pas de stockage central : le cache local ne se synchronise pas entre appareils. La persistance partagée et l’historique commun seront une étape suivante.
-- Import limité à 32 Mo compressés et décompressés ; transferts volumineux potentiellement lents. Pas de reprise automatique d’un transfert interrompu : le MJ peut relancer le partage.
+- Aucune limite de taille imposée aux archives ou aux projets partagés. La mémoire et le quota de stockage du navigateur restent les limites pratiques ; les transferts volumineux peuvent être longs. Pas de reprise automatique : le MJ peut relancer le partage.
 - Les fiches sont consultables ; leur édition et les mécaniques propres aux dés CLAP! restent à ajouter.
 - Pas encore d’import des images ou scènes dans les dossiers natifs de la bibliothèque Owlbear.
 - La sélection d’une fiche est déclarative ; aucun verrou d’attribution exclusif n’est implémenté.
