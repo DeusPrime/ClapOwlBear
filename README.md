@@ -1,4 +1,4 @@
-# CLAP! pour Owlbear Rodeo — 0.2.9
+# CLAP! pour Owlbear Rodeo — 0.2.10
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
@@ -11,6 +11,10 @@ Cette version ajoute `background_url`. Faire recharger le manifeste dans Owlbear
 Chaque participant doit avoir l’extension active dans la salle. Le moteur d’arrière-plan du MJ crée automatiquement la partie, les joueurs la rejoignent avec leurs identités Owlbear distinctes. Aucun identifiant de salle CLAP!, compte du site ou mot de passe supplémentaire à saisir.
 
 La fermeture du panneau ne ferme pas la partie : la page d’arrière-plan conserve la connexion tant que l’onglet Owlbear reste ouvert. Le MJ conserve l’état et les sauvegardes sur son navigateur ; les joueurs disposent de leur propre fiche et de leurs ressources locales.
+
+## Dés et notifications 0.2.10
+
+Les jets publics apparaissent dans un toast graphique compact en bas à droite de la table, même quand le panneau CLAP! est fermé. Il reprend les silhouettes de dés et leurs animations, puis les couleurs et le score du résultat. Il s’efface automatiquement et laisse passer les clics sur la carte. Les jets privés ne l’ouvrent pas ; les détails restent dans la discussion. Les numéros de jets sont à nouveau reconnus après une remise à zéro de la salle.
 
 ## Correctif 0.2.9
 

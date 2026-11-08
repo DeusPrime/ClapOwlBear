@@ -22,9 +22,11 @@ globalThis.BroadcastChannel = class {
   close() { this.constructor.channels.delete(this); }
 };
 const notifications = [];
+const rollToasts = [];
 let metadata = {}, roomMetadata = {};
 const receive = (id, data) => window.dispatchEvent(new window.MessageEvent('message', { origin, data: { id, data } }));
 window.postMessage = message => {
+  if (message.id === "OBR_MODAL_OPEN") rollToasts.push(message.data);
   if (message.id === "OBR_NOTIFICATION_SHOW") notifications.push(message.data.message);
   if (!message.nonce) return;
   const values = { OBR_PLAYER_GET_ID: { id: 'host' }, OBR_PLAYER_GET_NAME: { name: 'MJ' }, OBR_PLAYER_GET_ROLE: { role: 'GM' }, OBR_PLAYER_GET_CONNECTION_ID: { connectionId: 'connection-host' }, OBR_PLAYER_GET_METADATA: { metadata }, OBR_PLAYER_GET_COLOR: { color: '#123456' }, OBR_PLAYER_GET_SYNC_VIEW: { syncView: false }, OBR_PARTY_GET_PLAYERS: { players: [] }, OBR_ROOM_GET_METADATA: { metadata: roomMetadata } };
@@ -71,12 +73,15 @@ try {
   if (background) {
     await command('broadcastRoll', ['Public roll', 'D6: 4', { public: true }]);
     await new Promise(resolve => setTimeout(resolve, 50));
-    assert.equal(notifications.length, 1, 'Public rolls must reach the native Owlbear notification API');
-    assert.ok(notifications[0].includes('Public roll'));
+    assert.equal(rollToasts.length, 1, 'Public rolls must open the graphic toast over the Owlbear table');
+    assert.equal(rollToasts[0].disablePointerEvents, true);
+    assert.equal(rollToasts[0].hideBackdrop, true);
+    assert.ok(rollToasts[0].url.includes('roll-toast.html#'));
+    assert.equal(notifications.length, 0, 'Do not duplicate graphic results with verbose text notifications');
     await command('setRollVisibility', [true]);
     await command('broadcastRoll', ['Secret roll', 'D6: 2', {}]);
     await new Promise(resolve => setTimeout(resolve, 50));
-    assert.equal(notifications.length, 1, 'Hidden rolls must not trigger native notifications');
+    assert.equal(rollToasts.length, 1, 'Hidden rolls must not open graphic toasts');
   }
   console.log('Production startup OK: ' + (background ? 'background engine and MJ session' : 'foreground interface'));
   process.exit(0);

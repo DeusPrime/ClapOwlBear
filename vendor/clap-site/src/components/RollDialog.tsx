@@ -1,3 +1,4 @@
+import type { RollVisual } from "@/lib/rollVisual";
 import RollOutcomeEffect from "./RollOutcomeEffect";
 import RollingDie from "./RollingDie";
 import RollAttributeDial, { facetNames } from "./RollAttributeDial";
@@ -161,7 +162,7 @@ export default function RollDialog({
   const [logError, setLogError] = useState("");
   const [logging, setLogging] = useState(false);
   const [visibilityBusy, setVisibilityBusy] = useState(false);
-  const pendingLog = useRef<{ label: string; summary: string; id: string; requestId?: string } | null>(null);
+  const pendingLog = useRef<{ label: string; summary: string; id: string; requestId?: string; rollVisual?: RollVisual } | null>(null);
   const requestResolved = useRef(false);
   const [die, setDie] = useState<DieFace>(6);
   useEffect(() => { if (open) { setDie(initialDie); setLogError(""); pendingLog.current = null; requestResolved.current = false; } }, [open, requestId, initialDie]);
@@ -349,7 +350,17 @@ export default function RollDialog({
       }).join("\n");
     }
     const name = selection.map(item => item.name).join(" + ") || "Jet de dés";
-    const entry = { label: contextLabel ? `${contextLabel} · ${name}` : name, summary: details, id: crypto.randomUUID(), ...(requestId && !requestResolved.current ? { requestId } : {}) };
+    const visualResult = describeRoll(next);
+    const rollVisual: RollVisual = {
+      label: (contextLabel ? contextLabel + ' · ' + name : name).slice(0, 300), potential,
+      outcome: visualResult.complication ? 'complication' : visualResult.prowess ? 'prowess' : recommended ? 'success' : 'failure',
+      prowess: visualResult.prowess,
+      ...(recommended ? { successes: (visualResult.prowess && !visualResult.complication ? visualResult.prowessValue! : recommended.value) + (recommended.kind === 'supernatural' ? 1 : 0) } : {}),
+      ...(group.length > 1 ? { groupCount: group.length, groupSuccesses: group.filter(item => chooseResult(buildCandidates(item))).length } : {}),
+      dice: visualResult.displayDice.slice(0, 32).map(item => ({ sides: item.sides, value: item.value, kind: item.kind,
+        outcome: item.unavailable ? 'discarded' : item.complication ? 'complication' : item.prowess ? 'prowess' : item.value > potential ? 'failure' : item.chosen || (recommended?.kind === item.kind && recommended?.index === item.index) ? 'success' : 'neutral' })),
+    };
+    const entry = { rollVisual, label: contextLabel ? `${contextLabel} · ${name}` : name, summary: details, id: crypto.randomUUID(), ...(requestId && !requestResolved.current ? { requestId } : {}) };
     pendingLog.current = entry;
     void logRoll(entry);
   };
@@ -357,7 +368,7 @@ export default function RollDialog({
   async function logRoll(entry: NonNullable<typeof pendingLog.current>) {
     setLogging(true); setLogError("");
     try {
-      await roomClient.broadcastRoll(entry.label, entry.summary, { id: entry.id, ...(entry.requestId ? { requestId: entry.requestId } : {}), ...(forcePublic && roomSession?.role !== "mj" ? { public: true } : {}) });
+      await roomClient.broadcastRoll(entry.label, entry.summary, { id: entry.id, ...(entry.rollVisual ? { rollVisual: entry.rollVisual } : {}), ...(entry.requestId ? { requestId: entry.requestId } : {}), ...(forcePublic && roomSession?.role !== "mj" ? { public: true } : {}) });
       if (entry.requestId) requestResolved.current = true;
       if (pendingLog.current === entry) pendingLog.current = null;
     } catch { setLogError("Le jet n’a pas été enregistré dans la discussion. Réessaie l’envoi."); }

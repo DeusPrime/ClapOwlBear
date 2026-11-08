@@ -1,9 +1,11 @@
+import { rollVisualSchema } from "./rollVisual";
 ﻿import { z } from 'zod/v3';
 
 export const chatEntrySchema = z.object({
   id: z.number().int().nonnegative(), sender: z.string().max(100), name: z.string().max(40),
   role: z.enum(['mj', 'player']), text: z.string().max(2400), created: z.number().finite().nonnegative(),
   kind: z.enum(['chat', 'roll', 'request', 'system', 'whisper']).optional(), hidden: z.boolean().optional(),
+  rollVisual: rollVisualSchema.optional(),
   requestId: z.string().max(100).optional(), privateTo: z.string().max(100).optional(),
 });
 export const rollRequestSchema = z.object({
@@ -13,7 +15,7 @@ export const rollRequestSchema = z.object({
 });
 export const gameCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('chat'), id: z.string().uuid(), text: z.string().trim().min(1).max(2000), target: z.string().max(100).optional() }),
-  z.object({ type: z.literal('roll'), id: z.string().uuid(), label: z.string().trim().min(1).max(300), summary: z.string().trim().min(1).max(1500), requestId: z.string().uuid().optional(), public: z.boolean().optional() }),
+  z.object({ type: z.literal('roll'), id: z.string().uuid(), label: z.string().trim().min(1).max(300), summary: z.string().trim().min(1).max(1500), rollVisual: rollVisualSchema.optional(), requestId: z.string().uuid().optional(), public: z.boolean().optional() }),
 ]);
 export const localGameSchema = z.object({
   messages: z.array(chatEntrySchema).max(3200), requests: z.array(rollRequestSchema).max(100),
@@ -53,7 +55,7 @@ export function applyGameCommand(game: LocalGame, input: GameCommand, member: Ga
     requests = requests.filter(value => value.id !== requestId);
     if (member.role === 'mj' && game.hideRolls && !command.public) privateTo = member.id;
   }
-  const message = { id: game.sequence + 1, sender: member.id, name: member.name, role: member.role, text, created: now, kind, hidden: Boolean(privateTo), ...(privateTo ? { privateTo } : {}), ...(requestId ? { requestId } : {}) };
+  const message = { ...(command.type === "roll" && command.rollVisual ? { rollVisual: command.rollVisual } : {}), id: game.sequence + 1, sender: member.id, name: member.name, role: member.role, text, created: now, kind, hidden: Boolean(privateTo), ...(privateTo ? { privateTo } : {}), ...(requestId ? { requestId } : {}) };
   const messages = [...game.messages, message];
   // Bound each private conversation separately from the public discussion.
   const scope = privateTo || '';

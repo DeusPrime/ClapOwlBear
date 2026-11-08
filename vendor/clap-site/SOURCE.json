@@ -1,6 +1,6 @@
 {
   "source": "DeusPrime/clap-cinematic-quest",
-  "syncedAt": "2026-11-08T18:54:17.353Z",
+  "syncedAt": "2026-11-08T19:19:41.257Z",
   "adaptations": [
     "zod/v3 compatibility",
     "GitHub Pages asset paths",
@@ -343,7 +343,7 @@
     ],
     [
       "vendor/clap-site/src/components/RollDialog.tsx",
-      "01a57cc44e097abb51ddcacac1606516038275f158e59ed48023c4b5db4e9e77"
+      "00e18246f589d538d86027f723b9175b710e3aaa2c660791d5033250fd21e627"
     ],
     [
       "vendor/clap-site/src/components/RollingDie.tsx",
@@ -971,7 +971,7 @@
     ],
     [
       "vendor/clap-site/src/lib/localRoomGame.ts",
-      "76a896682507b08585843f34fe9d8bb9dd4ada3e1be8c971310042d8c3b9c9ab"
+      "37c172fe8902cd8325506d2198192ba97822fc2c2349fe585c00506c172f4f69"
     ],
     [
       "vendor/clap-site/src/lib/losslessImage.ts",
@@ -1078,6 +1078,10 @@
       "aa99a546a11e861543a2d0399c3461032e26d3728b7787d0b08af4efbf1bd46f"
     ],
     [
+      "vendor/clap-site/src/lib/rollVisual.ts",
+      "ca05bee404df0382667d024086f735a96b13c3faa3f5a7796cb4374bc8933684"
+    ],
+    [
       "vendor/clap-site/src/lib/roomActorRolls.ts",
       "1c14487383e800ed4574a42ddaac2f99d1c3e59e2b5d41186bb53c1666262d33"
     ],
@@ -1091,7 +1095,7 @@
     ],
     [
       "vendor/clap-site/src/lib/roomClient.ts",
-      "36fe97eda3d414280471841ac4783ccbf6b62ef8c406fc5f5d22a33c01c4d8be"
+      "ac099f985003a0d21362efb29f9f03961719f932e03c775c406f40b1f15ac599"
     ],
     [
       "vendor/clap-site/src/lib/roomInventoryChanges.ts",

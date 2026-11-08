@@ -5,7 +5,7 @@ const base = "/ClapOwlBear/";
 const publicUrl = "https://deusprime.github.io/ClapOwlBear/";
 export default defineConfig(({ command }) => ({
   base,
-  define: { __APP_VERSION__: JSON.stringify("0.2.9") },
+  define: { __APP_VERSION__: JSON.stringify("0.2.10") },
   resolve: {
     alias: { "@owlbear": resolve("src"), "@": resolve("vendor/clap-site/src") },
     dedupe: ["react", "react-dom"],
@@ -20,12 +20,14 @@ export default defineConfig(({ command }) => ({
           if (file.includes("vite/preload-helper")) return "preload";
           if (file.endsWith("/src/runtime/client.ts")) return "runtime";
           if (file.includes("/node_modules/")) return "dependencies";
+          if (/\/components\/(DiceModel|RollingDie|RollOutcomeEffect)\.tsx$/.test(file) || file.includes("/assets/dice/")) return "dice-visuals";
           if (file.includes("/vendor/clap-site/")) return "site";
         },
       },
       input: {
         main: resolve("index.html"),
         background: resolve("background.html"),
+        rollToast: resolve("roll-toast.html"),
       },
     },
   },
@@ -37,7 +39,7 @@ export default defineConfig(({ command }) => ({
         const manifest = JSON.parse(
           readFileSync("public/manifest.json", "utf8").replace(/^\uFEFF/, ""),
         );
-        manifest.icon = new URL("icon.svg?v=0.2.9", publicUrl).href;
+        manifest.icon = new URL("icon.svg?v=0.2.10", publicUrl).href;
         manifest.background_url = new URL("background.html", publicUrl).href;
         manifest.action.icon = manifest.icon;
         manifest.action.popover = new URL("index.html", publicUrl).href;

@@ -9,7 +9,7 @@ it('notifies public rolls outside the popover once, without replaying history or
   expect(show).not.toHaveBeenCalled();
   state = { ...state, messages: [...state.messages, { ...base, id: 2, created: 101 }] }; listener(); listener();
   expect(show).toHaveBeenCalledTimes(1);
-  expect(show).toHaveBeenCalledWith('CLAP! MJ : D6 : 4');
+  expect(show).toHaveBeenCalledWith(expect.objectContaining({ name: 'MJ', text: 'D6 : 4' }));
   state = { ...state, messages: [...state.messages, { ...base, id: 3, created: 102, hidden: true, privateTo: 'gm' } as any] }; listener();
   expect(show).toHaveBeenCalledTimes(1);
   state = { ...state, messages: [...state.messages.map(message => ({ ...message }))] }; listener();
@@ -28,7 +28,7 @@ it('does not replay recent dice while a project reset updates the session before
   state = { ...state, session: { ...state.session, gameGeneration: 'new' } }; listener();
   state = { ...state, messages: [] }; listener();
   expect(show).toHaveBeenCalledTimes(1);
-  state = { ...state, messages: [{ ...roll, id: 10, created: 102 }] }; listener();
+  state = { ...state, messages: [{ ...roll, id: 1, created: 102 }] }; listener();
   expect(show).toHaveBeenCalledTimes(2);
   stop();
 });

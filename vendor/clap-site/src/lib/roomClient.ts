@@ -1,4 +1,5 @@
 import {callRoomApi,sharedRoomClient} from '@owlbear/runtime/client';
+import type { RollVisual } from "./rollVisual";
 import { localizeText } from '@/i18n/localize';
 import { selectDirectory, loadDirectories } from "./directories";
 import { ensureRoomProject } from './roomProject';
@@ -1012,8 +1013,8 @@ export class RoomClient {
     toast(localizeText(`${member.name} — ${roll.label}`), { description: roll.summary, duration: 6500 });
     if (session.role === "mj") this.peers.forEach((peer, id) => { if (id !== sender) peer.transport?.send(roll); });
   }
-  async broadcastRoll(label: string, summary: string, options: { id?: string; requestId?: string; public?: boolean } = {}) {
-    await this.command({ type: 'roll', id: options.id || crypto.randomUUID(), label, summary, ...(options.requestId ? { requestId: options.requestId } : {}), ...(options.public ? { public: true } : {}) });
+  async broadcastRoll(label: string, summary: string, options: { id?: string; requestId?: string; public?: boolean; rollVisual?: RollVisual } = {}) {
+    await this.command({ type: 'roll', id: options.id || crypto.randomUUID(), label, summary, ...(options.rollVisual ? { rollVisual: options.rollVisual } : {}), ...(options.requestId ? { requestId: options.requestId } : {}), ...(options.public ? { public: true } : {}) });
     if (options.requestId) this.resolvedRequests.add(options.requestId);
   }
 }

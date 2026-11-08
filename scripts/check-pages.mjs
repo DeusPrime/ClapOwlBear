@@ -21,7 +21,7 @@ for (const url of [
     `Missing resource: ${url}`,
   );
 }
-for (const entry of ["index.html", "background.html"]) {
+for (const entry of ["index.html", "background.html", "roll-toast.html"]) {
   const html = readFileSync(`dist/${entry}`, "utf8");
   const assets = [...html.matchAll(/(?:src|href)="([^"#]+)"/g)].map(
     (m) => m[1],

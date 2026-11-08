@@ -1,3 +1,4 @@
+import { createNativeRollToasts } from "./runtime/native-roll-toasts";
 import { rememberPlayerSession, rememberedPlayerSession } from "./runtime/player-session";
 import { watchPublicRolls } from "./runtime/roll-notifications";
 import OBR from "@owlbear-rodeo/sdk";
@@ -19,7 +20,8 @@ async function start() {
   const { initializeDirectoryAssets } = await import("@/lib/directoryAssets");
   await initializeDirectoryAssets();
   const { roomClient } = await import("@/lib/roomClient");
-  const stopRollNotifications = watchPublicRolls(roomClient, message => OBR.notification.show(message, "INFO"));
+  const rollToasts = createNativeRollToasts(OBR.modal, new URL("roll-toast.html", location.href).href);
+  const stopRollNotifications = watchPublicRolls(roomClient, rollToasts.show);
   const archiveKey = `clap-owlbear-archive:${port.roomId}:${self.id}`;
   let connecting = false,
     joinError = "",
@@ -137,6 +139,7 @@ async function start() {
     "pagehide",
     () => {
       stopRollNotifications();
+      rollToasts.stop();
       roomClient.stop();
       service.stop();
     },
