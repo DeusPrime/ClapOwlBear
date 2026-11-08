@@ -1,6 +1,6 @@
 {
   "source": "DeusPrime/clap-cinematic-quest",
-  "syncedAt": "2026-11-08T12:43:54.725Z",
+  "syncedAt": "2026-11-08T12:51:32.700Z",
   "adaptations": [
     "zod/v3 compatibility",
     "GitHub Pages asset paths",
@@ -411,7 +411,7 @@
     ],
     [
       "vendor/clap-site/src/components/RoomProjectImport.tsx",
-      "9d5ec33d6cfda8f32b9defb936f2fbc5f6e943c866646c5653665da0030cf256"
+      "8fafc72df494fc8ad2bd0c1dce48c960ce6027f414a4872cf6f55b32ffe71627"
     ],
     [
       "vendor/clap-site/src/components/RoomResourceView.tsx",
@@ -1071,11 +1071,11 @@
     ],
     [
       "vendor/clap-site/src/lib/roomArchive.ts",
-      "0aa95e7fb7059bcd67e3202cdc3ca134c2e9ac396972bd442f8eab65f62b6f4e"
+      "9b34ed45de925a1c4a51d65560ac15c8221855d2ad4aef5780ecdb90de766bbe"
     ],
     [
       "vendor/clap-site/src/lib/roomClient.ts",
-      "ef48936e53d9a9ecb68c12d51841ac9727242a90fa133c224a4bf79e41fba162"
+      "68bb68919b2033f7729b62b0663020ac8959e3c44051e8d8b72a607720831650"
     ],
     [
       "vendor/clap-site/src/lib/roomNickname.ts",

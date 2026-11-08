@@ -16,6 +16,8 @@ export const roomArchiveSchema = z.object({
   updatedAt: z.number().finite().nonnegative(), hostId: z.string().max(100), hostName: z.string().max(40),
   posterImage: rasterImageSchema.optional(), posterEditing: imageEditingSchema.optional(),
   projectName: z.string().min(1).max(80).optional(),
+  projectId: z.string().min(1).max(100).optional(),
+  projectLinks: z.record(z.string().min(1).max(100), z.object({ name: z.string().min(1).max(80), refs: z.array(privateRefSchema).max(500) })).refine(value => Object.keys(value).length <= 50).optional(),
   game: localGameSchema, privateRefs: z.array(privateRefSchema).max(500),
   heroes: z.array(roomCharacterSchema).max(100), resources: z.array(roomResourceSchema).max(500),
   heroSources: z.record(z.string().max(100), z.string().max(100)).optional(),
@@ -111,6 +113,7 @@ export async function importRoomArchive(file: File) {
   const room: RoomArchive = { ...source, id: crypto.randomUUID(), updatedAt: Date.now(), resources: resources.map(resource => ({ ...resource, item: { ...resource.item, imageEditing: undefined } })) as RoomArchive['resources'], heroes,
     heroSources: source.heroSources && Object.fromEntries(Object.entries(source.heroSources).map(([id, target]) => [id, ids.get('hero:' + target) || target])),
     privateRefs: source.privateRefs.map(ref => ({ ...ref, id: ids.get(ref.type + ':' + ref.id) || ref.id })),
+    projectLinks: source.projectLinks && Object.fromEntries(Object.entries(source.projectLinks).map(([key, project]) => [key, { ...project, refs: project.refs.map(ref => ({ ...ref, id: ids.get(ref.type + ':' + ref.id) || ref.id })) }])),
     sheets: Object.fromEntries(Object.entries(source.sheets).map(([id, hero]) => [id, remapHero(hero)])),
     sheetResources: Object.fromEntries(Object.entries(source.sheetResources).map(([id, values]) => [id, values.map(resource => ({ ...resource, item: { ...resource.item, id: ids.get(resource.type + ':' + resource.item.id)!, directoryId } }))])),
   };
@@ -120,14 +123,15 @@ export async function importRoomArchive(file: File) {
 }
 export async function captureRoomLibrary(room: RoomArchive): Promise<RoomArchive> {
   const { getCharacter } = await import('./characters');
-  const heroes = (await Promise.all(room.privateRefs.filter(ref => ref.type === 'hero').map(async ref => {
+  const refs = [...new Map([...room.privateRefs, ...Object.values(room.projectLinks || {}).flatMap(project => project.refs)].map(ref => [ref.type + ':' + ref.id, ref])).values()];
+  const heroes = (await Promise.all(refs.filter(ref => ref.type === 'hero').map(async ref => {
     const saved = room.heroes.find(hero => hero.id === ref.id) as Character | undefined;
     const local = await getCharacter(ref.id);
     return saved && (!local || saved.updatedAt >= local.updatedAt) ? saved : local;
   }))).filter((hero): hero is Character => Boolean(hero));
   const current = await loadAllBundledResources();
   const resources = [...current, ...room.resources.filter(resource => !current.some(value => value.type === resource.type && value.item.id === resource.item.id))];
-  const needed = new Set(room.privateRefs.filter(ref => ref.type !== 'hero').map(ref => ref.type + ':' + ref.id));
+  const needed = new Set(refs.filter(ref => ref.type !== 'hero').map(ref => ref.type + ':' + ref.id));
   for (const hero of heroes) for (const link of hero.linkedResources) needed.add(link.type + ':' + link.id);
   return roomArchiveSchema.parse({ ...room, heroes: heroes.map(hero => ({ ...hero, portrait: hero.portrait || undefined })), resources: resources.filter(resource => needed.has(resource.type + ':' + resource.item.id)).map(resource => ({ ...resource, item: { ...resource.item, image: resource.item.image || undefined, imageEditing: undefined } })) }) as RoomArchive;
 }

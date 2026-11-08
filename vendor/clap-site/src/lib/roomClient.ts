@@ -19,6 +19,8 @@ const STORAGE = "clap-room-session-v1";
 type Peer = { pc: RTCPeerConnection; transport?: RoomTransport; connection: string; instance: string; started: number; sheet: string; assignment?: string; resources?: Map<string, string> };
 type Snapshot = {
   projectName?: string;
+  projectId?: string;
+  projects?: { id: string; name: string }[];
   availableHeroes?: { id: string; name: string; ownerId?: string }[];
   roomHeroes: Character[];
   heroProposals: (Extract<RoomMessage, { kind?: 'hero-proposal' }> & { playerId: string })[];
@@ -72,7 +74,13 @@ export class RoomClient {
   };
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   snapshot = () => this.state;
-  private update(patch: Partial<Snapshot>) { this.state = { ...this.state, roomHeroes: (this.archive?.heroes || []) as Character[], ...patch }; this.listeners.forEach(l => l()); }
+  private update(patch: Partial<Snapshot>) {
+    const refs = patch.privateRefs || this.state.privateRefs;
+    const active = new Set(refs.filter(ref => ref.type === 'hero').map(ref => ref.id));
+    const heroes = this.archive?.heroes || [];
+    this.state = { ...this.state, projectId: this.archive?.projectId, projects: Object.entries(this.archive?.projectLinks || {}).map(([id, project]) => ({ id, name: project.name })), roomHeroes: (this.archive?.projectId ? heroes.filter(hero => active.has(hero.id)) : heroes) as Character[], ...patch };
+    this.listeners.forEach(l => l());
+  }
   private persist() {
     const session = this.state.session;
     if (session?.role !== 'mj' || !this.archive) return;
@@ -86,22 +94,50 @@ export class RoomClient {
     this.persistence = this.persistence.catch(() => {}).then(() => saveLocalRoom(record));
     void this.persistence.catch(() => this.update({ error: 'La sauvegarde locale a échoué. Exporte ta salle avant de fermer.' }));
   }
-  setPrivateRefs(privateRefs: PrivateRoomRef[]) { this.update({ privateRefs }); this.persist(); }
+  setPrivateRefs(privateRefs: PrivateRoomRef[]) {
+    if (this.archive?.projectId && this.archive.projectLinks?.[this.archive.projectId]) this.archive = { ...this.archive, projectLinks: { ...this.archive.projectLinks, [this.archive.projectId]: { ...this.archive.projectLinks[this.archive.projectId], refs: privateRefs } } };
+    this.update({ privateRefs }); this.persist();
+  }
+  async useProject(projectId: string) {
+    const archive = this.archive, session = this.state.session;
+    if (session?.role !== 'mj' || !archive) throw new Error('Changement de projet réservé au MJ.');
+    if (this.importingProject) throw new Error('Un import de projet est déjà en cours.');
+    const linked = archive.projectLinks?.[projectId];
+    if (linked) {
+      this.archive = { ...archive, projectId, projectName: linked.name };
+      this.update({ projectName: linked.name, privateRefs: linked.refs });
+      this.publishGame(); await this.persistence;
+      window.dispatchEvent(new Event('focus'));
+      return;
+    }
+    const { collectStudioProject } = await import('./studioProject');
+    const project = await collectStudioProject(projectId);
+    if (project.project.roomKey) throw new Error('Choisis un projet de ta bibliothèque.');
+    if (this.archive?.id !== archive.id || this.state.session?.id !== session.id) throw new Error('La salle a changé. Réessaie.');
+    const JSZip = (await import('jszip')).default;
+    const bytes = await new JSZip().file('studio.json', JSON.stringify(project)).generateAsync({ type: 'arraybuffer' });
+    await this.importProject(bytes, projectId);
+  }
   private importingProject = false;
-  async importProject(bytes: ArrayBuffer) {
+  async importProject(bytes: ArrayBuffer, sourceId?: string) {
     const session = this.state.session, archive = this.archive;
     if (session?.role !== 'mj' || !archive) throw new Error('Import réservé au MJ.');
     if (this.importingProject) throw new Error('Un import de projet est déjà en cours.');
+    if (Object.keys(archive.projectLinks || {}).length >= 50) throw new Error('La salle contient déjà 50 projets.');
     this.importingProject = true;
     try {
     const directory = ensureRoomProject(archive.id, archive.title);
     const { importStudioArchive } = await import('./studioImport');
-    const result = await importStudioArchive(bytes, () => {}, { directoryId: directory.id, maxHeroes: 100 - archive.heroes.length, maxResources: 500 - archive.resources.length, maxEntries: 500 - this.state.privateRefs.length });
+    const result = await importStudioArchive(bytes, () => {}, { directoryId: directory.id, maxHeroes: 100 - archive.heroes.length, maxResources: 500 - archive.resources.length, maxEntries: 500 });
     if (this.archive?.id !== archive.id || this.state.session?.id !== session.id) throw new Error('La salle a changé. Le projet importé reste disponible sur cet appareil.');
     const heroes = (await Promise.all(result.heroIds.map(id => getCharacter(id)))).filter((hero): hero is Character => Boolean(hero));
     const resources = (await (await import('./resourceBundle')).loadAllBundledResources()).filter(resource => result.resourceRefs.some(ref => ref.type === resource.type && ref.id === resource.item.id));
-    const refs = [...this.state.privateRefs, ...heroes.map(hero => ({ type: 'hero' as const, id: hero.id })), ...result.resourceRefs];
-    this.archive = { ...this.archive, projectName: result.sourceName, heroes: [...this.archive.heroes, ...heroes.map(hero => roomCharacterSchema.parse({ ...hero, portrait: hero.portrait || undefined }))], resources: [...this.archive.resources, ...resources.map(transferableRoomResource)] };
+    const refs = [...heroes.map(hero => ({ type: 'hero' as const, id: hero.id })), ...result.resourceRefs];
+    const projectId = sourceId || crypto.randomUUID();
+    const projectLinks = { ...this.archive.projectLinks };
+    if (!this.archive.projectId && this.state.privateRefs.length) projectLinks[crypto.randomUUID()] = { name: this.archive.projectName || 'Projet précédent', refs: this.state.privateRefs };
+    projectLinks[projectId] = { name: result.sourceName, refs };
+    this.archive = { ...this.archive, projectId, projectLinks, projectName: result.sourceName, heroes: [...this.archive.heroes, ...heroes.map(hero => roomCharacterSchema.parse({ ...hero, portrait: hero.portrait || undefined }))], resources: [...this.archive.resources, ...resources.map(transferableRoomResource)] };
     this.update({ projectName: result.sourceName });
     this.setPrivateRefs(refs);
     this.publishGame();
@@ -181,7 +217,7 @@ export class RoomClient {
     const heroes = this.state.members.filter(value => value.role === 'player').map(value => ({ id: value.id,
       heroName: (this.state.sheets[value.id]?.nom || '').slice(0, 160), heroConcept: (this.state.sheets[value.id]?.concept || '').slice(0, 300) }));
     const owners = new Map(Object.entries({ ...this.archive?.sheets, ...this.state.sheets }).filter(([id]) => this.state.members.some(member => member.id === id && member.role === 'player')).map(([id, hero]) => [hero.id, id]));
-    const roomHeroes = [...new Map([...(this.archive?.heroes || []), ...Object.values(this.archive?.sheets || {}), ...Object.values(this.state.sheets)].map(hero => [hero.id, hero])).values()].map(hero => ({ id: hero.id, name: (hero.nom || 'Héros sans nom').slice(0, 160), ownerId: owners.get(hero.id) }));
+    const roomHeroes = [...new Map([...this.state.roomHeroes, ...Object.values(this.archive?.sheets || {}), ...Object.values(this.state.sheets)].map(hero => [hero.id, hero])).values()].map(hero => ({ id: hero.id, name: (hero.nom || 'Héros sans nom').slice(0, 160), ownerId: owners.get(hero.id) }));
     return { kind: 'game-state', ...gameView(this.game, member), heroes, roomHeroes };
   }
   private publishGame() {

@@ -71,6 +71,7 @@ const empty = {
 };
 export const commands = new Set([
   "importProject",
+  "useProject",
   "setRoomTitle",
   "linkSiteRoom",
   "unlinkSiteRoom",
