@@ -331,11 +331,15 @@ export class RoomClient {
     this.proposal = undefined;
   }
   async setRoomTitle(title:string){await this.api('/title',{title});await this.refreshRoom();this.persist();}
+  private integrationChanging=false;
+  isRoomTransitioning(){return this.integrationChanging||this.busy;}
   async linkSiteRoom(link:string){
-    const config=await this.api<{room:string}>('/integration/validate',{link});const name=this.state.session?.name||'MJ Owlbear';
-    if(this.state.session)await this.leave();await this.api('/integration/link',{link},null);await this.enter(name,config.room);
+    this.integrationChanging=true;
+    try{const config=await this.api<{room:string}>('/integration/validate',{link});const name=this.state.session?.name||'MJ Owlbear';
+    if(this.state.session)await this.leave();await this.api('/integration/link',{link},null);await this.enter(name,config.room);}
+    finally{this.integrationChanging=false;}
   }
-  async unlinkSiteRoom(){const name=this.state.session?.name||'MJ Owlbear';if(this.state.session)await this.leave();await this.api('/integration/unlink',{},null);await this.enter(name,undefined,undefined,{title:'Salle CLAP!'});}
+  async unlinkSiteRoom(){this.integrationChanging=true;try{const name=this.state.session?.name||'MJ Owlbear';if(this.state.session)await this.leave();await this.api('/integration/unlink',{},null);await this.enter(name,undefined,undefined,{title:'Salle CLAP!'});}finally{this.integrationChanging=false;}}
   async sendChat(text: string, target?: string) {
     await this.command({ type: 'chat', id: crypto.randomUUID(), text, ...(target ? { target } : {}) });
   }

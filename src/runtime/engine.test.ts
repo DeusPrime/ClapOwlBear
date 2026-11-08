@@ -55,6 +55,18 @@ describe("Moteur CLAP! partagé — MJ et joueurs", () => {
         ),
       { timeout: 12000, interval: 50 },
     );
+    const fetchGuard = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ features: {} }),
+      } as Response);
+    await expect(
+      host.linkSiteRoom("ABCDEF123456." + "A".repeat(43)),
+    ).rejects.toThrow("mise à jour");
+    expect(host.snapshot().session?.role).toBe("mj");
+    expect(host.isRoomTransitioning()).toBe(false);
+    fetchGuard.mockRestore();
     const { blankCharacter } = await import("@/lib/characters");
     const source = blankCharacter();
     source.nom = "Camille";

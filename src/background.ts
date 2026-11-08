@@ -46,6 +46,7 @@ async function start() {
   const connect = async () => {
     if (
       connecting ||
+      roomClient.isRoomTransitioning() ||
       service.paused ||
       roomClient.snapshot().session ||
       Date.now() < nextAttempt
