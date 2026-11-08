@@ -9,7 +9,7 @@ export class RoomTransport {
   private incoming = "";
   private expected = 0;
   private lastChunk = 0;
-  constructor(readonly channel: RTCDataChannel, receive: (message: RoomMessage) => void) {
+  constructor(readonly channel: RTCDataChannel, receive: (message: RoomMessage) => void, private generation?: () => string | undefined) {
     channel.bufferedAmountLowThreshold = 64000;
     channel.onbufferedamountlow = () => this.flush();
     channel.onmessage = ({ data }) => {
@@ -37,7 +37,7 @@ export class RoomTransport {
   }
   send(message: RoomMessage) {
     if (this.channel.readyState !== "open") return false;
-    const json = JSON.stringify(message);
+    const json = JSON.stringify(this.generation ? { ...message, roomGeneration: this.generation() } : message);
     if (json.length > MAX_SIZE || this.pending.length > 1500) return false;
     this.pending.push(`size:${json.length}`);
     for (let i = 0; i < json.length;) {

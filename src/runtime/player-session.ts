@@ -1,7 +1,7 @@
 import type { RoomSession } from '@/lib/roomProtocol';
 const key = (room: string, player: string) => 'clap-owlbear-player-session:v1:' + room + ':' + player;
 export function rememberPlayerSession(room: string, player: string, session: RoomSession | null) {
-  if (session?.role !== 'player' || !session.characterId) return;
+  if (session?.role !== 'player' || (!session.characterId && !session.gameGeneration)) return;
   try {
     const value = JSON.stringify(session), storageKey = key(room, player);
     if (localStorage.getItem(storageKey) !== value) localStorage.setItem(storageKey, value);

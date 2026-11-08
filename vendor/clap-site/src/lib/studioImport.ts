@@ -99,7 +99,7 @@ function availableName(original: string) {
   }
 }
 
-export async function importStudioArchive(bytes: ArrayBuffer, onProgress: (message: string) => void = () => {}, options: { directoryId?: string; maxHeroes?: number; maxResources?: number; maxEntries?: number } = {}) {
+export async function importStudioArchive(bytes: ArrayBuffer, onProgress: (message: string) => void = () => {}, options: { directoryId?: string; maxHeroes?: number; maxResources?: number; maxEntries?: number; copyAppearance?: boolean } = {}) {
   onProgress("Vérification du projet…");
   const snapshot = await readStudioArchive(bytes);
   // Validate the entire archive before creating any data. Every imported record gets a new identity.
@@ -113,7 +113,7 @@ export async function importStudioArchive(bytes: ArrayBuffer, onProgress: (messa
   const cleanup: (() => Promise<unknown>)[] = [];
   let unresolvedLinks = 0;
   try {
-    if (!target) {
+    if (!target || options.copyAppearance) {
       updateDirectoryBack(project.id, snapshot.project);
       updateDirectoryPoster(project.id, snapshot.project.posterImage, snapshot.project.posterEditing);
     }

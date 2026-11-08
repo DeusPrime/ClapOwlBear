@@ -12,25 +12,22 @@ import {
   Routes,
   Route,
   Navigate,
-  NavLink,
   Link,
   useParams,
 } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { LanguageProvider } from "@/i18n/LanguageContext";
+import { LanguageProvider, useLang } from "@/i18n/LanguageContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { useRoom } from "@/hooks/use-room";
 import { roomClient } from "@/lib/roomClient";
 import { loadCharacters, type Character } from "@/lib/characters";
-import { activeDirectory } from "@/lib/directories";
-import RoomMJWorkspace from "@/components/RoomMJWorkspace";
-import RoomPlayerWorkspace from "@/components/RoomPlayerWorkspace";
 import RoomManagement from "@/components/RoomManagement";
 import LocalRoomLibrary from "@/components/LocalRoomLibrary";
 import RoomRewardNotification from "@/components/RoomRewardNotification";
 import GlobalExportLoader from "@/components/GlobalExportLoader";
-import GameMenu from "./GameMenu";
+import ThemeToggle from "@/components/ThemeToggle";
+import { OwlbearMJWorkspace, OwlbearPlayerWorkspace } from "./OwlbearWorkspace";
 import {
   runtimeInfo,
   runtimeSubscribe,
@@ -174,7 +171,7 @@ function RoomView() {
           </p>
         </div>
         {room.session.role === "mj" && (
-          <RoomManagement invitation={siteInvitation()} />
+          <RoomManagement invitation={siteInvitation()} extraActions={<Link to="/settings" className="block p-2 text-sm underline">Import / export &amp; liaison</Link>} />
         )}
       </div>
       {room.error && (
@@ -188,14 +185,14 @@ function RoomView() {
       {room.session.role === "mj" ? (
         <div className="px-4">
           <div className="mt-5">
-            <RoomMJWorkspace characters={heroes} />
+            <OwlbearMJWorkspace characters={heroes} />
           </div>
         </div>
       ) : (
-        <RoomPlayerWorkspace
+        <div className="room-player-workspace"><OwlbearPlayerWorkspace
           characters={heroes}
           invitation={siteInvitation()}
-        />
+        /></div>
       )}
     </main>
   );
@@ -255,33 +252,6 @@ function Settings() {
             </Button>
           </form>
           <section className="space-y-3 border border-ink/20 p-4">
-            <h2 className="font-display text-2xl">
-              Importer un projet .clapStudio
-            </h2>
-            <input
-              aria-label="Importer un projet .clapStudio"
-              type="file"
-              accept=".clapStudio"
-              disabled={busy || !room.session}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file)
-                  void run(async () => {
-                    const { importProject } = await import("./project");
-                    const result = await importProject(
-                      await file.arrayBuffer(),
-                      setNotice,
-                    );
-                    setNotice(
-                      `Projet « ${result.project.name} » importé. Les héros et cartes sont disponibles dans votre salle.`,
-                    );
-                    window.dispatchEvent(new Event("focus"));
-                  });
-              }}
-            />
-          </section>
-          <section className="space-y-3 border border-ink/20 p-4">
             <h2 className="font-display text-2xl">Exporter la partie</h2>
             <p className="text-sm">
               Le fichier .clapSalle contient l’état de la partie, les héros, les
@@ -334,35 +304,18 @@ function Settings() {
   );
 }
 export function Shell() {
-  const gm = useGM(),
-    info = useSyncExternalStore(runtimeSubscribe, runtimeInfo),
-    nativeAdmin = info?.role === "GM";
+  const { lang, setLang } = useLang();
   useEffect(() => {
     notifyViewReady();
   }, []);
   return (
     <>
       <header className="owlbear-header flex items-center gap-3 border-b border-ink/15 bg-paper px-4 py-2">
-        <GameMenu
-          value={activeDirectory()}
-          onChange={() => window.dispatchEvent(new Event("focus"))}
-        />
         <Logo className="h-10 w-10 shrink-0" />
-        <Link to="/app/salle" className="min-w-0 flex-1 font-display text-xl">
-          Clap & Role
-        </Link>
-        <span className="text-[10px] text-muted-foreground">Owlbear · 0.2</span>
+        <Link to="/app/salle" className="min-w-0 flex-1 font-display text-xl">Clap & Role</Link>
+        <ThemeToggle />
+        <button type="button" aria-label={lang === "fr" ? "Switch to English" : "Passer en français"} onClick={() => setLang(lang === "fr" ? "en" : "fr")} className="min-h-10 min-w-10 text-sm font-bold">{lang === "fr" ? "EN" : "FR"}</button>
       </header>
-      {(gm || nativeAdmin) && (
-        <nav
-          className="flex gap-2 border-b border-ink/15 bg-paper px-4 py-2"
-          aria-label="Navigation MJ"
-        >
-          <NavLink to="/app/salle">Salle</NavLink>
-          {gm && <NavLink to="/app/studio">Projet</NavLink>}
-          <NavLink to="/settings">Import / export</NavLink>
-        </nav>
-      )}
       <Suspense
         fallback={
           <p className="p-6" role="status">

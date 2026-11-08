@@ -26,12 +26,7 @@ vi.mock("@/lib/roomClient", () => ({
   roomClient: { snapshot: () => state.room },
 }));
 vi.mock("@/lib/characters", () => ({ loadCharacters: async () => [] }));
-vi.mock("@/components/RoomMJWorkspace", () => ({
-  default: () => <div>Outils du MJ</div>,
-}));
-vi.mock("@/components/RoomPlayerWorkspace", () => ({
-  default: () => <div>Fiche et discussion du joueur</div>,
-}));
+vi.mock("./OwlbearWorkspace", () => ({ OwlbearMJWorkspace: () => <div>Outils du MJ</div>, OwlbearPlayerWorkspace: () => <div>Fiche et discussion du joueur</div> }));
 vi.mock("@/components/RoomHeroReserve", () => ({
   default: () => <div>Réserve des héros</div>,
 }));
@@ -99,8 +94,8 @@ describe("Interface intégrée et permissions", () => {
         root = mount();
       });
       expect(document.body.textContent).toContain("Outils du MJ");
-      expect(
-        document.querySelector('nav[aria-label="Navigation MJ"]')?.textContent,
-      ).toContain("Projet");
+      expect(document.querySelector('.owlbear-header')?.textContent).not.toContain('Projet');
+      expect(document.querySelector('button[aria-label="Ouvrir le menu CLAP!"]')).toBeNull();
+      expect(document.querySelector('.owlbear-header')?.querySelectorAll('button')).toHaveLength(2);
     }));
 });

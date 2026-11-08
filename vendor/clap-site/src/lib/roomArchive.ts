@@ -18,6 +18,7 @@ export const roomArchiveSchema = z.object({
   projectName: z.string().min(1).max(80).optional(),
   owlbearUrl: owlbearRoomUrlSchema.optional(),
   projectId: z.string().min(1).max(100).optional(),
+  gameGeneration: z.string().uuid().optional(),
   projectLinks: z.record(z.string().min(1).max(100), z.object({ name: z.string().min(1).max(80), refs: z.array(privateRefSchema).max(500) })).refine(value => Object.keys(value).length <= 50).optional(),
   game: localGameSchema, privateRefs: z.array(privateRefSchema).max(500),
   heroes: z.array(roomCharacterSchema).max(100), resources: z.array(roomResourceSchema).max(500),

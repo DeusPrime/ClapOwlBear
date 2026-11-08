@@ -62,12 +62,12 @@ try {
   const deadline = Date.now() + 8000;
   while (Date.now() < deadline && !errors.length) {
     if (background) { channel.postMessage({ type: 'hello' }); if (snapshot?.session?.role === 'mj') break; }
-    else if (document.querySelector('nav[aria-label="Navigation MJ"]')) break;
+    else if (document.querySelector('.owlbear-header')) break;
     await new Promise(resolve => setTimeout(resolve, 50));
   }
   assert.deepEqual(errors, [], 'Compiled startup must not throw');
   if (background) assert.equal(snapshot?.session?.role, 'mj', 'Compiled background must open a real MJ session');
-  else assert.ok(document.querySelector('nav[aria-label="Navigation MJ"]'), 'Compiled foreground must mount the MJ interface');
+  else assert.ok(document.querySelector('.owlbear-header'), 'Compiled foreground must mount the integrated header');
   if (background) {
     await command('broadcastRoll', ['Public roll', 'D6: 4', { public: true }]);
     await new Promise(resolve => setTimeout(resolve, 50));

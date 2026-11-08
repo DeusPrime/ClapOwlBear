@@ -60,7 +60,7 @@ edit("lib/toolPdf.ts", (s) =>
 );
 // Preserve the complete character flag in the integration's archive and P2P payload.
 edit("lib/roomProtocol.ts", (s) =>
-  s.replace(
+  s.includes("climaxUsed: z.boolean()") ? s : s.replace(
     "mandatoryComplication: z.boolean(),",
     "mandatoryComplication: z.boolean(), climaxUsed: z.boolean().default(false),",
   ),

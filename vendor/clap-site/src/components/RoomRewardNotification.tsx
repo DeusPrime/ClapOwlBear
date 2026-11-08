@@ -7,7 +7,7 @@ import { useRoom } from "@/hooks/use-room";
 type Reward = { id?: string; title: string; removed: boolean; resource?: BundledResource; item?: Record<string, string | number> };
 export default function RoomRewardNotification() {
   const { session } = useRoom();
-  return session?.role === "player" ? <RewardQueue key={session.id} /> : null;
+  return session?.role === "player" ? <RewardQueue key={`${session.id}:${session.gameGeneration || ""}`} /> : null;
 }
 function RewardQueue() {
   const [queue, setQueue] = useState<Reward[]>([]);

@@ -24,3 +24,9 @@ it('ignores missing or malformed storage and never persists an MJ session', () =
   localStorage.setItem('clap-owlbear-player-session:v1:owl-room:alice', '{broken');
   expect(rememberedPlayerSession('owl-room', 'alice', session.room, 'alice')).toBeUndefined();
 });
+
+it('replaces an old hero binding with a cleared session after a project reset', () => {
+  rememberPlayerSession('owl-room', 'alice', { ...session, gameGeneration: 'old-game' });
+  rememberPlayerSession('owl-room', 'alice', { ...session, characterId: undefined, gameGeneration: 'new-game' });
+  expect(rememberedPlayerSession('owl-room', 'alice', session.room, 'alice', 'epoch')).toBeUndefined();
+});

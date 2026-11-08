@@ -156,6 +156,7 @@ export function sharedRoomClient<T extends object>(factory: () => T): T {
     if (data?.type === "snapshot") {
       const previous = snapshot;
       snapshot = data.partial ? { ...snapshot, ...data.snapshot } : data.snapshot;
+      if (previous.session?.gameGeneration !== snapshot.session?.gameGeneration) { heldRewards.clear(); seenEvents.clear(); }
       listeners.forEach((fn) => fn());
       if (!refresh && ["roomHeroes", "sheetResources", "sheets", "savedSheets"].some(key => previous[key] !== snapshot[key]))
         refresh = setTimeout(() => {
@@ -257,6 +258,7 @@ export function serveRoomClient(
   const equal = (a: any, b: any, depth = 2): boolean => a === b || Boolean(depth && a && b && typeof a === 'object' && typeof b === 'object' && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(key => Object.prototype.hasOwnProperty.call(b, key) && equal(a[key], b[key], depth - 1)));
   const publish = (force: unknown = false) => {
     const next = { ...client.snapshot(), ...integrationState?.() };
+    if (lastSnapshot?.session?.gameGeneration !== next.session?.gameGeneration) events.clear();
     const partial = Boolean(lastSnapshot) && force !== true;
     const changed = partial ? Object.fromEntries(Object.entries(next).filter(([key, value]) => !equal(value, lastSnapshot![key]))) : next;
     lastSnapshot = next;

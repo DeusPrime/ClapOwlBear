@@ -2325,7 +2325,7 @@ export const CharacterCards = ({
   );
 };
 
-const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, roomRequestId, roomDiscussion, roomRequests, roomContextLabel, roomHeroViewKey, roomNavigation, renderRoomMenu }: { characterId?: string; onClose?: () => void; primaryInRoom?: boolean; roomRequestId?: string; roomDiscussion?: ReactNode; roomRequests?: ReactNode; roomContextLabel?: string; roomHeroViewKey?: number; roomNavigation?: ReactNode; renderRoomMenu?: (actions: ReactNode) => ReactNode } = {}) => {
+const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, compactRoom = false, roomRequestId, roomDiscussion, roomRequests, roomContextLabel, roomHeroViewKey, roomNavigation, renderRoomMenu }: { characterId?: string; onClose?: () => void; primaryInRoom?: boolean; compactRoom?: boolean; roomRequestId?: string; roomDiscussion?: ReactNode; roomRequests?: ReactNode; roomContextLabel?: string; roomHeroViewKey?: number; roomNavigation?: ReactNode; renderRoomMenu?: (actions: ReactNode) => ReactNode } = {}) => {
   const { requestExit, dialog: exitDialog } = useExitConfirmation();
   const { id: routeId } = useParams();
   const id = characterId ?? routeId;
@@ -2340,15 +2340,15 @@ const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, roomRequ
   const [mode, setMode] = useState<Mode>("view");
   const [tab, setTab] = useState<Tab>("identity");
   const swipeStart = useRef<{ x: number; y: number; id: number } | null>(null);
-  const [wideRoom, setWideRoom] = useState(() => primaryInRoom && window.matchMedia("(min-width: 1200px)").matches);
+  const [wideRoom, setWideRoom] = useState(() => primaryInRoom && !compactRoom && window.matchMedia("(min-width: 1200px)").matches);
   useEffect(() => {
-    if (!primaryInRoom) return;
+    if (!primaryInRoom || compactRoom) { setWideRoom(false); return; }
     const media = window.matchMedia("(min-width: 1200px)");
     const refresh = () => setWideRoom(media.matches);
     refresh();
     media.addEventListener("change", refresh);
     return () => media.removeEventListener("change", refresh);
-  }, [primaryInRoom]);
+  }, [primaryInRoom, compactRoom]);
   useEffect(() => { if (wideRoom && tab === "discussion") setTab("identity"); }, [wideRoom, tab]);
   const sheetTabs = mode === "edit" ? TABS.filter((item) => item.id !== "state") : TABS;
   const editorTabs = primaryInRoom && !wideRoom ? [...sheetTabs, { id: "discussion" as Tab, label: "Discussion" }] : sheetTabs;

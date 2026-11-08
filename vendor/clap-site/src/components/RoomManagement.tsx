@@ -9,11 +9,12 @@ import { roomClient } from "@/lib/roomClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import RoomHeroReserve from './RoomHeroReserve';
+import RoomProjectImport from './RoomProjectImport';
 import { loadCharacters, type Character } from '@/lib/characters';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-type Panel = "invitation" | "members" | "password" | "transfer" | "leave" | "heroes" | "owlbear";
-const titles = { owlbear: "Relier Owlbear Rodeo", heroes: "Gérer les héros", invitation: "Inviter à la salle", members: "Membres de la salle", password: "Mot de passe de la salle", transfer: "Transmettre le rôle de MJ", leave: "Quitter la salle" };
+type Panel = "project" | "invitation" | "members" | "password" | "transfer" | "leave" | "heroes" | "owlbear";
+const titles = { project: "Changer de projet", owlbear: "Relier Owlbear Rodeo", heroes: "Gérer les héros", invitation: "Inviter à la salle", members: "Membres de la salle", password: "Mot de passe de la salle", transfer: "Transmettre le rôle de MJ", leave: "Quitter la salle" };
 export default function RoomManagement({ invitation, compact = false, onShowHeroes, onChooseHero, extraActions }: { invitation: string; compact?: boolean; onShowHeroes?: () => void; onChooseHero?: () => void; extraActions?: ReactNode }) {
   const room = useRoom();
   const [panel, setPanel] = useState<Panel | null>(null);
@@ -44,12 +45,14 @@ export default function RoomManagement({ invitation, compact = false, onShowHero
       <DropdownMenuItem className="min-h-11 gap-3" onSelect={() => open("members")}><Users size={17} />{localizeText("Membres de la salle")}</DropdownMenuItem>
       {localizeNode(isMJ && <>{isLinkedSite() && <DropdownMenuItem className="min-h-11 gap-3" onSelect={() => open("password")}><Shield size={17} />{localizeText("Modifier le mot de passe")}</DropdownMenuItem>}<DropdownMenuItem className="min-h-11 gap-3" onSelect={() => open("transfer")}><Crown size={17} />{localizeText("Transmettre le rôle de MJ")}</DropdownMenuItem></>)}
       {isMJ && <DropdownMenuItem className="min-h-11 gap-3" onSelect={() => { void roomClient.exportArchive().catch(cause => toast.error(localizeText(cause instanceof Error ? cause.message : 'Export impossible.'))); }}>{localizeText("Exporter la salle .clapSalle")}</DropdownMenuItem>}
+      {isMJ && <DropdownMenuItem className="min-h-11 gap-3" onSelect={() => open('project')}><Settings size={17} />Changer de projet</DropdownMenuItem>}
       {isMJ && isLinkedSite() && <DropdownMenuItem className="min-h-11 gap-3" onSelect={() => open('owlbear')}><Link2 size={17} />{localizeText("Relier Owlbear Rodeo")}</DropdownMenuItem>}
       <DropdownMenuSeparator /><DropdownMenuItem className="min-h-11 gap-3 text-destructive" onSelect={() => open("leave")}>{localizeNode(isMJ ? <Trash2 size={17} /> : <LogOut size={17} />)}{localizeNode(isMJ ? "Fermer la salle" : "Quitter la salle")}</DropdownMenuItem>
     </DropdownMenuContent></DropdownMenu>
     <Dialog open={panel !== null} onOpenChange={value => { if (!value && !busy) setPanel(null); }}><DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] max-w-xl overflow-y-auto bg-paper">
       <DialogTitle className="pr-6 font-display text-3xl">{localizeNode(panel === "leave" && isMJ ? "Fermer la salle" : panel ? titles[panel] : "Gérer la salle")}</DialogTitle>
       <DialogDescription>{localizeNode(room.roomInfo?.title || "Votre salle de jeu")}</DialogDescription>
+      {panel === "project" && isMJ && <RoomProjectImport management onComplete={() => setPanel(null)} />}
       {panel === 'owlbear' && isMJ && <div className="space-y-4"><p className="text-sm">Le code autorise les membres de ta salle Owlbear à rejoindre cette partie comme joueurs, sans leur communiquer le mot de passe. La salle sera masquée dans l’annuaire public du site.</p><p className="text-sm">Colle ensuite ce code dans l’extension CLAP! d’Owlbear. Pour piloter la partie depuis Owlbear comme MJ, utilise « Transmettre le rôle de MJ » après la connexion du participant Owlbear.</p><Button disabled={busy} onClick={() => void action(async () => { const result = await roomClient.createOwlbearInvite(); setOwlbearCode(result.code); })}>Générer un code de liaison</Button>{owlbearCode && <><Input aria-label="Code de liaison Owlbear" readOnly value={owlbearCode} onFocus={event => event.target.select()} /><Button variant="outline" onClick={() => void copy(owlbearCode)}>Copier le code</Button><p className="text-xs text-muted-foreground">Ce code donne uniquement un accès joueur. Le regénérer révoque le précédent. Il expire avec la fermeture de la salle.</p></>}</div>}
       {localizeNode(panel === 'heroes' && isMJ && <RoomHeroReserve characters={characters} />)}
       {localizeNode(panel === "invitation" && <div className="space-y-4"><p className="font-mono text-xl tracking-widest">{localizeNode(session.room)}</p><Button variant="outline" onClick={() => void copy(session.room)}><Copy size={15} className="mr-2" />{localizeText("Copier l’identifiant")}</Button><Input aria-label={localizeText("Lien d’invitation")} value={invitation} readOnly onFocus={event => event.target.select()} /><Button variant="outline" onClick={() => void copy(invitation)}>{localizeText("Copier le lien")}</Button>{localizeNode(qr && <img src={qr} alt={localizeText("QR code pour rejoindre la salle")} width={224} height={224} className="mx-auto" />)}<p className="text-sm text-muted-foreground">{localizeNode(room.roomInfo?.locked ? "Le mot de passe de la salle sera demandé aux invités." : "Les invités rejoignent la salle comme joueurs.")}</p></div>)}

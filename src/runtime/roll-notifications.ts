@@ -1,11 +1,12 @@
 import type { RoomChatMessage } from '@/lib/roomProtocol';
-type Snapshot = { session: { room: string } | null; messages: RoomChatMessage[] };
+type Snapshot = { session: { room: string; gameGeneration?: string } | null; messages: RoomChatMessage[] };
 export function watchPublicRolls(client: { snapshot: () => Snapshot; subscribe: (listener: () => void) => () => void }, show: (message: string) => Promise<unknown>, startedAt = Date.now()) {
   let previous: RoomChatMessage[] | undefined, room: string | undefined;
   const seen = new Set<number>();
   const update = () => {
     const snapshot = client.snapshot();
-    if (room !== snapshot.session?.room) { room = snapshot.session?.room; previous = undefined; seen.clear(); }
+    const scope = snapshot.session ? snapshot.session.room + ':' + (snapshot.session.gameGeneration || '') : undefined;
+    if (room !== scope) { room = scope; previous = undefined; seen.clear(); }
     if (!room || snapshot.messages === previous) return;
     previous = snapshot.messages;
     for (const message of snapshot.messages) {

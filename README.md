@@ -1,4 +1,4 @@
-# CLAP! pour Owlbear Rodeo — 0.2.6
+# CLAP! pour Owlbear Rodeo — 0.2.7
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
@@ -12,13 +12,19 @@ Chaque participant doit avoir l’extension active dans la salle. Le moteur d’
 
 La fermeture du panneau ne ferme pas la partie : la page d’arrière-plan conserve la connexion tant que l’onglet Owlbear reste ouvert. Le MJ conserve l’état et les sauvegardes sur son navigateur ; les joueurs disposent de leur propre fiche et de leurs ressources locales.
 
+## Interface 0.2.7
+
+Le MJ utilise quatre onglets : Héros, Cartes, Ressources et Discussion. Le joueur dispose des onglets de sa fiche et de Discussion. Le coin supérieur droit contient uniquement le thème et le choix français / anglais.
+
+Le projet se remplace uniquement dans **Gérer la salle → Changer de projet**. Après confirmation explicite, l’ancienne progression est supprimée : fiches attribuées, blessures, inventaires, cartes et PV, discussion et jets. Le nouveau projet est copié dans une salle propre ; les projets d’origine restent inchangés. Chaque participant doit recharger Owlbear après la mise à jour du protocole.
+
 ## Fonctions
 
 - Interfaces et cartes interactives du site : identité, facettes, états, équipement, ressources, notes et jets CLAP!.
 - Attribution des héros, propositions des joueurs, transferts de cartes et modifications d’inventaire, demandes de jets et réglages de visibilité.
 - Chat public et murmures filtrés pour chaque destinataire. Les fiches complètes sont réservées au joueur concerné et au MJ.
 - Bibliothèque, création et édition des héros et cartes, outils de composition et exports du site pour le MJ.
-- Import `.clapStudio` dans un projet local ; les héros et cartes deviennent disponibles dans la partie. Pas de limite globale de 32 Mo à cet import ; les validations des champs et ressources du site restent utilisées.
+- Import `.clapStudio` depuis la gestion de salle ; le projet est copié dans la partie. Pas de limite globale de 32 Mo à cet import ; les validations des champs et ressources du site restent utilisées.
 - Export **`.clapSalle`** depuis la gestion de salle ou la bibliothèque de sauvegardes. Le format est celui du site (`salle.json`, version 1), avec ses validations et sa limite de 64 Mo. Il n’inclut aucun jeton d’accès ou mot de passe. Il contient les données privées du MJ : le conserver et le partager en conséquence.
 - Import et reprise d’une `.clapSalle` créée sur le site, depuis Import / export. Fermer la partie courante avant d’ouvrir une autre sauvegarde.
 - Tentative de migration automatique des projets importés avec l’ancienne extension 0.1.x. L’ancien cache reste conservé ; une archive d’origine peut toujours être réimportée.

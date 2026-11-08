@@ -43,36 +43,38 @@ export const roomResourceSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('power'), item: resourceSchemas.power.extend(resourceIdentity) }),
   z.object({ type: z.literal('vehicle'), item: resourceSchemas.vehicle.extend(resourceIdentity) }),
 ]);
+const gameScope = { roomGeneration: z.string().uuid().optional() };
 export const publicRollSchema = z.object({
+  ...gameScope,
   kind: z.literal("roll"), id: z.string().uuid(), sender: z.string().max(100),
   label: z.string().max(300), summary: z.string().max(1500),
 });
 export type PublicRoll = z.infer<typeof publicRollSchema>;
 export const roomMessageSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal('hero-select'), id: z.string().uuid(), characterId: z.string().min(1).max(100) }),
-  z.object({ kind: z.literal('hero-proposal'), id: z.string().uuid(), character: roomCharacterSchema, resources: z.array(roomResourceSchema).max(200) }),
-  z.object({ kind: z.literal('hero-proposal-result'), id: z.string().uuid(), accepted: z.boolean() }),
-  z.object({ kind: z.literal('game-command'), command: gameCommandSchema }),
-  z.object({ kind: z.literal('game-result'), id: z.string().uuid(), error: z.string().max(250).optional() }),
-  z.object({ kind: z.literal('game-state'), owlbearUrl: owlbearRoomUrlSchema.optional(), roomHeroes: z.array(z.object({ id: z.string().min(1).max(100), name: z.string().max(160), ownerId: z.string().max(100).optional() })).max(116).optional(), messages: z.array(chatEntrySchema).max(3200), requests: z.array(rollRequestSchema).max(100), heroes: z.array(z.object({ id: z.string().max(100), heroName: z.string().max(160), heroConcept: z.string().max(300) })).max(16).optional() }),
-  z.object({ kind: z.literal('game-handoff'), id: z.string().uuid(), game: localGameSchema }),
-  z.object({ kind: z.literal('game-handoff-ready'), id: z.string().uuid() }),
+  z.object({ ...gameScope, kind: z.literal('hero-select'), id: z.string().uuid(), characterId: z.string().min(1).max(100) }),
+  z.object({ ...gameScope, kind: z.literal('hero-proposal'), id: z.string().uuid(), character: roomCharacterSchema, resources: z.array(roomResourceSchema).max(200) }),
+  z.object({ ...gameScope, kind: z.literal('hero-proposal-result'), id: z.string().uuid(), accepted: z.boolean() }),
+  z.object({ ...gameScope, kind: z.literal('game-command'), command: gameCommandSchema }),
+  z.object({ ...gameScope, kind: z.literal('game-result'), id: z.string().uuid(), error: z.string().max(250).optional() }),
+  z.object({ ...gameScope, kind: z.literal('game-state'), owlbearUrl: owlbearRoomUrlSchema.optional(), roomHeroes: z.array(z.object({ id: z.string().min(1).max(100), name: z.string().max(160), ownerId: z.string().max(100).optional() })).max(116).optional(), messages: z.array(chatEntrySchema).max(3200), requests: z.array(rollRequestSchema).max(100), heroes: z.array(z.object({ id: z.string().max(100), heroName: z.string().max(160), heroConcept: z.string().max(300) })).max(16).optional() }),
+  z.object({ ...gameScope, kind: z.literal('game-handoff'), id: z.string().uuid(), game: localGameSchema }),
+  z.object({ ...gameScope, kind: z.literal('game-handoff-ready'), id: z.string().uuid() }),
   publicRollSchema,
-  z.object({ kind: z.literal('hero-action'), operationId: z.string().uuid(), characterId: z.string().max(100), action: z.discriminatedUnion('type', [
+  z.object({ ...gameScope, kind: z.literal('hero-action'), operationId: z.string().uuid(), characterId: z.string().max(100), action: z.discriminatedUnion('type', [
     z.object({ type: z.literal('edit-sheet'), character: roomCharacterSchema, expectedUpdatedAt: z.number().finite(), expectedState: z.string().max(1000000).optional() }),
     z.object({ type: z.literal('add-item'), category: z.enum(['armes', 'armures', 'autresAccessoires']), item: z.object({ nom: z.string().min(1).max(300), proprietes: z.string().max(2000), degats: z.string().max(100), poids: z.string().max(100), protection: z.string().max(100) }) }),
     z.object({ type: z.literal('remove-item'), category: z.enum(['armes', 'armures', 'autresAccessoires']), index: z.number().int().min(0).max(99), expected: z.string().max(10000) }),
     z.object({ type: z.literal('unlink-resource'), resourceType: z.enum(['key-role', 'figurant', 'profile', 'power', 'vehicle']), id: z.string().max(100) }),
   ]) }),
-  z.object({ kind: z.literal('link-resource'), operationId: z.string().uuid(), characterId: z.string().max(100), resource: roomResourceSchema }),
-  z.object({ kind: z.literal('resource-linked'), operationId: z.string().uuid(), error: z.string().max(250).optional() }),
-  z.object({ kind: z.literal('sheet-resource'), characterId: z.string().max(100), resource: roomResourceSchema }),
-  z.object({ kind: z.literal("assign-sheet"), assignmentId: z.string().uuid(), character: roomCharacterSchema, resources: z.array(roomResourceSchema).max(200).optional(), project: z.object({ id: z.string().min(1).max(100), title: z.string().trim().min(1).max(80) }).optional() }),
-  z.object({ kind: z.literal("assigned-sheet"), assignmentId: z.string().uuid() }),
-  z.object({ kind: z.literal("sheet"), character: roomCharacterSchema.nullable() }),
+  z.object({ ...gameScope, kind: z.literal('link-resource'), operationId: z.string().uuid(), characterId: z.string().max(100), resource: roomResourceSchema }),
+  z.object({ ...gameScope, kind: z.literal('resource-linked'), operationId: z.string().uuid(), error: z.string().max(250).optional() }),
+  z.object({ ...gameScope, kind: z.literal('sheet-resource'), characterId: z.string().max(100), resource: roomResourceSchema }),
+  z.object({ ...gameScope, kind: z.literal("assign-sheet"), assignmentId: z.string().uuid(), character: roomCharacterSchema, resources: z.array(roomResourceSchema).max(200).optional(), project: z.object({ id: z.string().min(1).max(100), title: z.string().trim().min(1).max(80) }).optional() }),
+  z.object({ ...gameScope, kind: z.literal("assigned-sheet"), assignmentId: z.string().uuid() }),
+  z.object({ ...gameScope, kind: z.literal("sheet"), character: roomCharacterSchema.nullable() }),
 ]);
 export type RoomMessage = z.infer<typeof roomMessageSchema>;
-export type RoomSession = { room: string; id: string; token: string; name: string; role: "mj" | "player"; localRoomId?: string; roomDirectoryId?: string; receivedAssignment?: string; receivedResourceOps?: string[]; characterId?: string };
+export type RoomSession = { room: string; id: string; token: string; name: string; role: "mj" | "player"; localRoomId?: string; roomDirectoryId?: string; gameGeneration?: string; retiredGameGenerations?: string[]; receivedAssignment?: string; receivedResourceOps?: string[]; characterId?: string };
 export type RoomMember = { id: string; name: string; role: "mj" | "player"; instance: string; online: boolean; owlbearRole?: "GM" | "PLAYER"; platform?: 'owlbear'; heroName?: string; heroConcept?: string };
 export type RoomSignal = { seq: number; sender: string; senderInstance: string; connection: string; description: RTCSessionDescriptionInit };
 export type RoomChatMessage = import('./localRoomGame').LocalGame['messages'][number];
