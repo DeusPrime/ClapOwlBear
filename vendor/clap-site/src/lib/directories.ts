@@ -1,3 +1,4 @@
+import { directoryAppearance, directoryMetadata, directoryAssetsRevision, saveDirectoryAppearance } from "./directoryAssets";
 import { imageEditingSchema, rasterImageSchema } from "./dataValidation";
 import type { ImageEditing } from "./imageEditing";
 import type { ResourceKind } from "./dataValidation";
@@ -11,9 +12,10 @@ export function updateDirectoryPoster(id: string, posterImage?: string, posterEd
   if (!directories.some(item => item.id === id)) throw new Error('Projet introuvable.');
   if (posterImage && !rasterImageSchema.safeParse(posterImage).success) throw new Error('Image d’affiche invalide.');
   if (posterEditing && !imageEditingSchema.safeParse(posterEditing).success) throw new Error('Réglages de l’affiche invalides.');
-  try { localStorage.setItem(KEY, JSON.stringify(directories.map(item => item.id === id ? { ...item, posterImage, posterEditing: posterImage ? posterEditing : undefined } : item))); }
-  catch { throw new Error('Espace de stockage insuffisant. Choisis une image moins volumineuse.'); }
-  window.dispatchEvent(new Event(DIRECTORY_POSTER_CHANGED));
+  return saveDirectoryAppearance(id, { posterImage, posterEditing: posterImage ? posterEditing : undefined }).then(() => {
+    localStorage.setItem(KEY, JSON.stringify(directoryMetadata(loadDirectories().map(item => item.id === id ? { ...item, posterImage, posterEditing: posterImage ? posterEditing : undefined } : item))));
+    window.dispatchEvent(new Event(DIRECTORY_POSTER_CHANGED));
+  });
 }
 export function resourceBackImage(directory: Directory | undefined, type: ResourceKind) {
   return directory?.backImages?.[type] || directory?.backImage || DEFAULT_RESOURCE_BACK_IMAGES[type];
@@ -22,13 +24,15 @@ const KEY = "clap-directories";
 const ACTIVE = "clap-active-directory";
 let cachedSource: string | null | undefined;
 let cachedDirectories: Directory[] = [];
+let cachedRevision = -1;
 export function loadDirectories(): Directory[] {
   const source = localStorage.getItem(KEY);
   // Posters and card backgrounds make this JSON large. Read storage for freshness
   // across tabs, but only parse it again when its contents actually change.
-  if (source !== cachedSource) {
+  if (source !== cachedSource || cachedRevision !== directoryAssetsRevision()) {
     const saved = JSON.parse(source || "[]") as Directory[];
-    cachedDirectories = saved.length ? saved : [{ id: DEFAULT_DIRECTORY, name: "Général" }];
+    cachedDirectories = (saved.length ? saved : [{ id: DEFAULT_DIRECTORY, name: "Général" }]).map(directoryAppearance);
+    cachedRevision = directoryAssetsRevision();
     cachedSource = source;
   }
   return cachedDirectories;
@@ -48,7 +52,7 @@ export function createDirectory(name: string, options?: { roomKey: string }) {
   const normalized = validateDirectoryName(name);
   const directories = loadDirectories();
   const directory = { id: crypto.randomUUID(), name: normalized, ...(options ? { roomKey: options.roomKey } : {}) };
-  localStorage.setItem(KEY, JSON.stringify([...directories, directory]));
+  localStorage.setItem(KEY, JSON.stringify(directoryMetadata([...directories, directory])));
   return directory;
 }
 function validateDirectoryName(name: string, exceptId?: string) {
@@ -64,7 +68,7 @@ export function renameDirectory(id: string, name: string) {
   const directories = loadDirectories();
   if (!directories.some(item => item.id === id)) throw new Error("Projet introuvable.");
   const normalized = validateDirectoryName(name, id);
-  localStorage.setItem(KEY, JSON.stringify(directories.map(item => item.id === id ? { ...item, name: normalized } : item)));
+  localStorage.setItem(KEY, JSON.stringify(directoryMetadata(directories.map(item => item.id === id ? { ...item, name: normalized } : item))));
 }
 export function updateDirectoryBack(id: string, settings: Pick<Directory, "backImage" | "backImages" | "backImageEditings" | "backFilmTitle">) {
   const directories = loadDirectories();
@@ -89,16 +93,18 @@ export function updateDirectoryBack(id: string, settings: Pick<Directory, "backI
     ...(settings.backImages !== undefined ? { backImages } : {}),
     ...(settings.backImages !== undefined || settings.backImageEditings !== undefined ? { backImageEditings } : {}),
   } : item);
-  try { localStorage.setItem(KEY, JSON.stringify(next)); }
-  catch { throw new Error("Espace de stockage insuffisant. Choisis une image de fond moins volumineuse."); }
-  window.dispatchEvent(new Event(DIRECTORY_BACK_CHANGED));
+  const updated = next.find(item => item.id === id)!;
+  return saveDirectoryAppearance(id, { backImage: updated.backImage, backImages: updated.backImages, backImageEditings: updated.backImageEditings }).then(() => {
+    localStorage.setItem(KEY, JSON.stringify(directoryMetadata(loadDirectories().map(item => item.id === id ? { ...item, backFilmTitle } : item))));
+    window.dispatchEvent(new Event(DIRECTORY_BACK_CHANGED));
+  });
 }
 // Called only after its heroes and resources have been deleted successfully.
 export function removeDirectory(id: string) {
   if (isProtectedDirectory(id)) throw new Error("Le projet Général ne peut pas être supprimé.");
   const remaining = loadDirectories().filter(item => item.id !== id);
   if (!remaining.length) remaining.push({ id: DEFAULT_DIRECTORY, name: "Général" });
-  localStorage.setItem(KEY, JSON.stringify(remaining));
+  localStorage.setItem(KEY, JSON.stringify(directoryMetadata(remaining)));
   if (localStorage.getItem(ACTIVE) === id) selectDirectory(remaining[0].id);
   return remaining[0].id;
 }

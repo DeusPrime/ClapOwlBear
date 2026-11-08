@@ -1,3 +1,4 @@
+import { deleteDirectoryAppearance } from "./directoryAssets";
 import JSZip from "jszip";
 import { z } from 'zod/v3';
 import { createDirectory, loadDirectories, removeDirectory, selectDirectory, updateDirectoryBack, updateDirectoryPoster, type Directory } from "./directories";
@@ -114,8 +115,8 @@ export async function importStudioArchive(bytes: ArrayBuffer, onProgress: (messa
   let unresolvedLinks = 0;
   try {
     if (!target || options.copyAppearance) {
-      updateDirectoryBack(project.id, snapshot.project);
-      updateDirectoryPoster(project.id, snapshot.project.posterImage, snapshot.project.posterEditing);
+      await updateDirectoryBack(project.id, snapshot.project);
+      await updateDirectoryPoster(project.id, snapshot.project.posterImage, snapshot.project.posterEditing);
     }
     const resourceIds = new Map<string, string>();
     for (const resource of snapshot.resources) resourceIds.set(`${resource.type}:${resource.item.id}`, crypto.randomUUID());
@@ -159,7 +160,7 @@ export async function importStudioArchive(bytes: ArrayBuffer, onProgress: (messa
     const rolledBack = [];
     for (const remove of cleanup.reverse()) { try { await remove(); rolledBack.push(true); } catch { rolledBack.push(false); } }
     if (rolledBack.every(Boolean)) {
-      try { if (!target) removeDirectory(project.id); } catch { throw new Error(`Import interrompu. Le projet « ${project.name} » est incomplet ; les projets existants sont conservés.`); }
+      try { if (!target) { removeDirectory(project.id); await deleteDirectoryAppearance(project.id); } } catch { throw new Error(`Import interrompu. Le projet « ${project.name} » est incomplet ; les projets existants sont conservés.`); }
       throw new Error(`Import annulé ; les projets existants sont conservés. ${cause instanceof Error ? cause.message : "Stockage indisponible."}`);
     }
     throw new Error(`Import interrompu. Des données partielles restent dans « ${project.name} » ; les projets existants sont conservés.`);

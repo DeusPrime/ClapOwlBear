@@ -21,8 +21,8 @@ export default function DirectoryBackSettings({ directoryId, triggerClassName }:
     const inherited = directory?.backImage ? Object.fromEntries(Object.keys(RESOURCE_APPEARANCE).map(type => [type, directory.backImage!])) : {};
     setBackImages({ ...inherited, ...directory?.backImages }); setBackImageEditings(directory?.backImageEditings ?? {}); setFilmTitle(directory?.backFilmTitle ?? ""); setError(""); setOpen(true);
   }
-  function save() {
-    try { updateDirectoryBack(directoryId, { backImages, backImageEditings, backFilmTitle: filmTitle }); setOpen(false); }
+  async function save() {
+    try { await updateDirectoryBack(directoryId, { backImages, backImageEditings, backFilmTitle: filmTitle }); setOpen(false); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Enregistrement impossible."); }
   }
   return <>

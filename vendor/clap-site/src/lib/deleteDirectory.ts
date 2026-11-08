@@ -1,3 +1,4 @@
+import { deleteDirectoryAppearance } from "./directoryAssets";
 import { loadCharacters, deleteCharacter, upsertCharacter } from "./characters";
 import { loadKeyRoles, deleteKeyRole } from "./keyRoles";
 import { loadFigurants, deleteFigurant } from "./figurants";
@@ -32,5 +33,7 @@ export async function deleteDirectoryWithContents(directoryId: string) {
   }
   for (const character of characters) if (character.directoryId === directoryId) await deleteCharacter(character.id);
   for (const tool of tools) if (tool.directoryId === directoryId) await deleteToolDocument(tool.id);
-  return removeDirectory(directoryId);
+  const remaining = removeDirectory(directoryId);
+  await deleteDirectoryAppearance(directoryId);
+  return remaining;
 }

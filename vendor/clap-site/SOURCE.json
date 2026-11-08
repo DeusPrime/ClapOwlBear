@@ -1,6 +1,6 @@
 {
   "source": "DeusPrime/clap-cinematic-quest",
-  "syncedAt": "2026-11-08T14:37:07.411Z",
+  "syncedAt": "2026-11-08T18:26:56.202Z",
   "adaptations": [
     "zod/v3 compatibility",
     "GitHub Pages asset paths",
@@ -147,7 +147,7 @@
     ],
     [
       "vendor/clap-site/src/components/DirectoryBackSettings.tsx",
-      "6a8d17b7a72787f6dfc25061878f726c9ad1f2ceba263a55b28983e311cfbe0b"
+      "6d8961d59addd3792c4e3e07e5ef3eccfc26308d7b1813966ba74ef60024bf9b"
     ],
     [
       "vendor/clap-site/src/components/DirectoryMenu.tsx",
@@ -311,7 +311,7 @@
     ],
     [
       "vendor/clap-site/src/components/ProjectTileMenu.tsx",
-      "03c943112c72271daf96e44c59a4e208c2ec28c4b4128ca37119b96577703552"
+      "d19747c59f2fd1badf4c8e1a0c06355bd38ec35f1ccf3651483e0595349074d5"
     ],
     [
       "vendor/clap-site/src/components/PwaInstallPrompt.tsx",
@@ -815,11 +815,15 @@
     ],
     [
       "vendor/clap-site/src/lib/deleteDirectory.ts",
-      "4d72112bed31dae042914566777498bea8d9196c852b0e921049ba23704a92c8"
+      "94be6fc18427c8c8dfb66714f8682e0acbe525f76dd3e6afa6ecad0ff7e1c710"
     ],
     [
       "vendor/clap-site/src/lib/directories.ts",
-      "6eb47b13696737e62c16528e47b442f7777f607cd8f85ec225e97db7e58e1580"
+      "d75f6d029ea64b90d3a3e4ee354401b355ae7b6ff61e4d26ca1b85c17fd6e463"
+    ],
+    [
+      "vendor/clap-site/src/lib/directoryAssets.ts",
+      "8cd5291cc139d7ef9e6d823d9e0888fe22f9496ac13305e372ef15e337e84189"
     ],
     [
       "vendor/clap-site/src/lib/dominantImageColor.ts",
@@ -1083,7 +1087,7 @@
     ],
     [
       "vendor/clap-site/src/lib/roomCleanup.ts",
-      "bdad4c8d600bf5ee6c6d8b4bb5851e7228bb7f57a3e7a1581bb4c12c608908d7"
+      "7450a18d44ea1c0badc00c75005bdc1f51d1fcd469b0e5af717f0fc5f5d9fb53"
     ],
     [
       "vendor/clap-site/src/lib/roomClient.ts",
@@ -1123,7 +1127,7 @@
     ],
     [
       "vendor/clap-site/src/lib/studioImport.ts",
-      "7673970f793dd03f700bcfeaaad7e0eae997e7d5c379c80c052894fb55b2ad8b"
+      "1f6184b411eeda67c7152b9ef53f53b78253d97880d2e8bd5b04a5a7bcd1b1fa"
     ],
     [
       "vendor/clap-site/src/lib/studioProject.ts",
@@ -1179,7 +1183,7 @@
     ],
     [
       "vendor/clap-site/src/main.tsx",
-      "20c22403eaa7117e94c93ae7755eb680b4161fdb0c6af701a80572da9f67bf9c"
+      "62bf4e28eb3d5cfba43b8f66f959cb6d7916cba1e977e7a2261fd9d12e2c5c61"
     ],
     [
       "vendor/clap-site/src/pages/Account.tsx",

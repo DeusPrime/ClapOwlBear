@@ -33,6 +33,8 @@ if (OBR.isAvailable)
       OBR.room.onMetadataChange(() => {
         void refresh();
       });
+      const { initializeDirectoryAssets } = await import("@/lib/directoryAssets");
+      await initializeDirectoryAssets();
       const { mount } = await import("./App");
       mount();
     })().catch((error) => {

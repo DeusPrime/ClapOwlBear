@@ -1,4 +1,4 @@
-# CLAP! pour Owlbear Rodeo — 0.2.7
+# CLAP! pour Owlbear Rodeo — 0.2.8
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
@@ -12,7 +12,11 @@ Chaque participant doit avoir l’extension active dans la salle. Le moteur d’
 
 La fermeture du panneau ne ferme pas la partie : la page d’arrière-plan conserve la connexion tant que l’onglet Owlbear reste ouvert. Le MJ conserve l’état et les sauvegardes sur son navigateur ; les joueurs disposent de leur propre fiche et de leurs ressources locales.
 
-## Interface 0.2.7
+## Correctif 0.2.8
+
+Les affiches, leurs images originales et les fonds de projet sont désormais conservés dans IndexedDB. Les anciennes images sont migrées automatiquement au démarrage, avant d’alléger localStorage. Cela évite que la copie du projet dans une salle échoue avec « Espace de stockage insuffisant » lorsque ces images dépassent le quota localStorage. Les images et leurs réglages restent présents après rechargement et sont synchronisés entre le moteur et le panneau Owlbear.
+
+## Interface
 
 Le MJ utilise quatre onglets : Héros, Cartes, Ressources et Discussion. Le joueur dispose des onglets de sa fiche et de Discussion. Le coin supérieur droit contient uniquement le thème et le choix français / anglais.
 

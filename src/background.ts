@@ -16,6 +16,8 @@ async function start() {
   await service.start();
   const channel = `clap-owlbear:${port.roomId}:${self.id}:${self.connectionId}`;
   configureRuntime({ background: true, channel }, service.api);
+  const { initializeDirectoryAssets } = await import("@/lib/directoryAssets");
+  await initializeDirectoryAssets();
   const { roomClient } = await import("@/lib/roomClient");
   const stopRollNotifications = watchPublicRolls(roomClient, message => OBR.notification.show(message, "INFO"));
   const archiveKey = `clap-owlbear-archive:${port.roomId}:${self.id}`;

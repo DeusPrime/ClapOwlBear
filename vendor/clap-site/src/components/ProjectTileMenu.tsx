@@ -42,8 +42,8 @@ const ProjectTileMenu = memo(function ProjectTileMenu({ project, onChange }: { p
         </form>
         <section className="space-y-3 border-b border-ink/10 pb-5" aria-label={localizeText("Image du projet")}>
           <h3 className="font-semibold">{localizeText("Affiche du projet")}</h3>
-          <ImageEditorField label={localizeText("Affiche du projet")} inputLabel="Importer une affiche" removeLabel="Rétablir l’affiche par défaut" value={project.posterImage || defaultProjectPoster} removable={!!project.posterImage} editing={project.posterEditing} aspectRatio={3 / 4} maxImageDimension={1000} onChange={(image, editing) => {
-            try { updateDirectoryPoster(project.id, image, editing); setError(''); onChange(); }
+          <ImageEditorField label={localizeText("Affiche du projet")} inputLabel="Importer une affiche" removeLabel="Rétablir l’affiche par défaut" value={project.posterImage || defaultProjectPoster} removable={!!project.posterImage} editing={project.posterEditing} aspectRatio={3 / 4} maxImageDimension={1000} onChange={async (image, editing) => {
+            try { await updateDirectoryPoster(project.id, image, editing); setError(''); onChange(); }
             catch (cause) { setError(cause instanceof Error ? cause.message : 'Enregistrement impossible.'); }
           }} />
           <p className="text-xs text-muted-foreground">{localizeText("Sans image personnalisée, l’affiche cinéma par défaut est utilisée. Les modifications de l’image sont enregistrées immédiatement.")}</p>

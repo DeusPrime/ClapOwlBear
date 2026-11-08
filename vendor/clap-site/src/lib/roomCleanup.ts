@@ -1,3 +1,4 @@
+import { deleteDirectoryAppearance } from "./directoryAssets";
 import { loadDirectories, removeDirectory } from './directories';
 
 /** Delete only editable copies owned by this room, never its source projects. */
@@ -19,5 +20,5 @@ export async function removeRoomCopies(roomId: string) {
   };
   for (const resource of resources) if (ids.has(resource.item.directoryId)) await removers[resource.type](resource.item.id);
   for (const tool of tools) if (ids.has(tool.directoryId)) await deleteToolDocument(tool.id);
-  for (const project of projects) removeDirectory(project.id);
+  for (const project of projects) { removeDirectory(project.id); await deleteDirectoryAppearance(project.id); }
 }
