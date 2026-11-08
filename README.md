@@ -1,4 +1,4 @@
-﻿# CLAP! pour Owlbear Rodeo
+# CLAP! pour Owlbear Rodeo
 
 Prototype d’extension Owlbear Rodeo indépendant du site CLAP!, compatible avec le format `.clapStudio` version 1.
 
@@ -29,8 +29,8 @@ npm.cmd ci
 ## Installer dans Owlbear
 
 1. Compiler avec `npm.cmd run build`.
-2. Héberger **le contenu de `dist/` à la racine d’un domaine HTTPS**. Aucun secret, service distant ou compte Supabase n’est nécessaire pour ce prototype.
-3. Ajouter l’extension dans Owlbear avec `https://votre-domaine/manifest.json`, puis l’activer dans la salle.
+2. Dans GitHub, ouvrir Settings > Pages et choisir **GitHub Actions** comme source. Le workflow `.github/workflows/pages.yml` publie `dist/` lors des push sur `main`.
+3. Une fois le déploiement réussi, ajouter cette URL dans Owlbear : `https://deusprime.github.io/ClapOwlBear/manifest.json`, puis activer cette extension dans la salle.
 4. Ouvrir le panneau CLAP! sur chaque navigateur participant.
 5. Côté MJ : importer un `.clapStudio`, puis cliquer sur « Partager tout le projet dans la salle ».
 6. Côté joueur : choisir un héros dans « Ma fiche », puis l’associer à son joueur.
@@ -57,7 +57,7 @@ npm.cmd ci
 - Les fiches sont consultables ; leur édition et les mécaniques propres aux dés CLAP! restent à ajouter.
 - Pas encore d’import des images ou scènes dans les dossiers natifs de la bibliothèque Owlbear.
 - La sélection d’une fiche est déclarative ; aucun verrou d’attribution exclusif n’est implémenté.
-- Pas de publication, commit ou push automatique dans ce dépôt.
+- Les push sur `main` publient cette extension sur GitHub Pages si Pages est activé. Aucun projet importé dans le navigateur ne fait partie de ce déploiement.
 
 ## Dépendances
 

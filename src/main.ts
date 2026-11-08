@@ -9,7 +9,7 @@ type Message={id:string;author:string;text:string;time:number};
 let messages:Message[]=[];
 const transfers=new Map<string,{sender:string;parts:string[];next:number;size:number;started:number}>();
 const app=document.querySelector<HTMLDivElement>('#app')!;
-app.innerHTML=`<header><img src="/icon.svg" alt=""><div><h1>CLAP! <span>STUDIO</span></h1><p>Votre plateau de jeu</p></div><span id="connection">Aperçu local</span></header><nav aria-label="Onglets"><button data-tab="project">Projet</button><button data-tab="sheet">Ma fiche</button><button data-tab="chat">Discussion</button></nav><p id="status" role="status"></p><main id="content"></main><footer>CLAP! · Owlbear Rodeo <span>0.1 · prototype</span></footer>`;
+app.innerHTML=`<header><img src="${import.meta.env.BASE_URL}icon.svg" alt=""><div><h1>CLAP! <span>STUDIO</span></h1><p>Votre plateau de jeu</p></div><span id="connection">Aperçu local</span></header><nav aria-label="Onglets"><button data-tab="project">Projet</button><button data-tab="sheet">Ma fiche</button><button data-tab="chat">Discussion</button></nav><p id="status" role="status"></p><main id="content"></main><footer>CLAP! · Owlbear Rodeo <span>0.1 · prototype</span></footer>`;
 const content=document.querySelector<HTMLElement>('#content')!;
 function status(text:string){document.querySelector('#status')!.textContent=text;}
 function el<K extends keyof HTMLElementTagNameMap>(tag:K,text='',className=''){const node=document.createElement(tag);node.textContent=text;node.className=className;return node;}
