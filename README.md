@@ -1,73 +1,71 @@
-# CLAP! pour Owlbear Rodeo
+﻿# CLAP! pour Owlbear Rodeo — 0.2
 
-Prototype d’extension Owlbear Rodeo indépendant du site CLAP!, compatible avec le format `.clapStudio` version 1.
+Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
-## Lancer en local
+## Installation
 
-Node.js 22.12+ (ou 24 LTS) et npm sont nécessaires.
+Lien public : **https://deusprime.github.io/ClapOwlBear/manifest.json**
+
+Cette version ajoute `background_url`. Faire recharger le manifeste dans Owlbear ; si la salle conserve l’ancien manifeste, réinstaller l’extension avec la même URL puis l’activer dans la salle. Un simple rafraîchissement de l’ancien panneau ne suffit pas si Owlbear n’a pas encore chargé le nouvel arrière-plan.
+
+Chaque participant doit avoir l’extension active dans la salle. Le moteur d’arrière-plan du MJ crée automatiquement la partie, les joueurs la rejoignent avec leurs identités Owlbear distinctes. Aucun identifiant de salle CLAP!, compte du site ou mot de passe supplémentaire à saisir.
+
+La fermeture du panneau ne ferme pas la partie : la page d’arrière-plan conserve la connexion tant que l’onglet Owlbear reste ouvert. Le MJ conserve l’état et les sauvegardes sur son navigateur ; les joueurs disposent de leur propre fiche et de leurs ressources locales.
+
+## Fonctions
+
+- Interfaces et cartes interactives du site : identité, facettes, états, équipement, ressources, notes et jets CLAP!.
+- Attribution des héros, propositions des joueurs, transferts de cartes et modifications d’inventaire, demandes de jets et réglages de visibilité.
+- Chat public et murmures filtrés pour chaque destinataire. Les fiches complètes sont réservées au joueur concerné et au MJ.
+- Bibliothèque, création et édition des héros et cartes, outils de composition et exports du site pour le MJ.
+- Import `.clapStudio` dans un projet local ; les héros et cartes deviennent disponibles dans la partie. Pas de limite globale de 32 Mo à cet import ; les validations des champs et ressources du site restent utilisées.
+- Export **`.clapSalle`** depuis la gestion de salle ou la bibliothèque de sauvegardes. Le format est celui du site (`salle.json`, version 1), avec ses validations et sa limite de 64 Mo. Il n’inclut aucun jeton d’accès ou mot de passe. Il contient les données privées du MJ : le conserver et le partager en conséquence.
+- Import et reprise d’une `.clapSalle` créée sur le site, depuis Import / export. Fermer la partie courante avant d’ouvrir une autre sauvegarde.
+- Tentative de migration automatique des projets importés avec l’ancienne extension 0.1.x. L’ancien cache reste conservé ; une archive d’origine peut toujours être réimportée.
+
+## Salles privées à Owlbear
+
+Les salles hébergées par cette extension **ne sont jamais inscrites dans l’annuaire du site** : aucun appel à l’API de création ou de liste du site. La présence et la signalisation passent par Owlbear ; les données de jeu utilisent les connexions WebRTC du moteur CLAP!.
+
+Cette version héberge une partie dans Owlbear. Le passage vers une partie sur le site se fait par `.clapSalle` ; elle n’établit pas de liaison en direct avec une salle déjà ouverte sur le site.
+
+Invitations et contrôle d’accès restent ceux d’Owlbear. Le MJ peut exclure un participant de CLAP!. Pour transmettre la partie, le successeur doit d’abord avoir le rôle MJ dans Owlbear ; l’interface ne propose que les successeurs autorisés. La partie CLAP! conserve un seul MJ actif, même avec plusieurs utilisateurs ayant le rôle GM Owlbear.
+
+## Développement
+
+Node.js 24 LTS recommandé.
 
 ```powershell
 npm.cmd ci
 npm.cmd run dev
-```
-
-Ouvrir l’adresse affichée par Vite. L’aperçu autonome permet de tester l’import, la consultation des fiches et les jets locaux ; les échanges entre joueurs exigent une vraie salle Owlbear.
-
-```powershell
-npm.cmd run build
 npm.cmd test
-npm.cmd run preview
+npm.cmd run build
+node scripts/check-pages.mjs
 ```
 
-Si npm rencontre `UNABLE_TO_VERIFY_LEAF_SIGNATURE` sur Windows, utiliser le magasin de certificats système, sans désactiver la vérification TLS :
+L’aperçu local est sous `/ClapOwlBear/`. Hors Owlbear, l’entrée affiche les instructions d’installation. Pour les essais intégrés, ajouter le manifeste servi localement dans une salle de test.
+
+Sous Windows, en cas d’erreur TLS npm, utiliser le magasin de certificats système sans désactiver la vérification :
 
 ```powershell
 $env:NODE_USE_SYSTEM_CA='1'
 npm.cmd ci
 ```
 
-## Installer dans Owlbear
+Pour reprendre les mises à jour du site :
 
-1. Compiler avec `npm.cmd run build`.
-2. Dans GitHub, ouvrir Settings > Pages et choisir **GitHub Actions** comme source. Le workflow `.github/workflows/pages.yml` publie `dist/` lors des push sur `main`.
-3. Une fois le déploiement réussi, ajouter cette URL dans Owlbear : `https://deusprime.github.io/ClapOwlBear/manifest.json`, puis activer cette extension dans la salle.
-4. Ouvrir le panneau CLAP! sur chaque navigateur participant.
-5. Côté MJ : importer un `.clapStudio`, puis cliquer sur « Partager tout le projet dans la salle ».
-6. Côté joueur : choisir un héros dans « Ma fiche », puis l’associer à son joueur.
-7. Tester les messages et jets publics dans « Discussion ».
+```powershell
+npm.cmd run sync:site -- "D:\jeu_de_role\Clap!!\Site\clap-cinematic-quest"
+npm.cmd test
+npm.cmd run build
+```
 
-## Fonctions actuelles
+Le script copie uniquement le code client et les ressources publiques, applique les chemins GitHub Pages et les adaptations de transport. Il ne copie ni serveur, ni `.env`, ni données utilisateur. `SOURCE.json` conserve la provenance et les empreintes des fichiers d’origine. `scripts/adapt-site.mjs` et `scripts/strict-site.mjs` rendent les adaptations explicites et reproductibles.
 
-- Lecture de l’archive ZIP `studio.json` exportée par le site ; vérification du format, de la version, des identifiants et de l’appartenance au projet.
-- Onglet Projet réservé au MJ, masqué pour les joueurs, y compris après un changement de rôle. Ce contrôle concerne la vue : le partage explicite transmet toujours toutes les données comme indiqué ci-dessous.
-- Identité visuelle du site CLAP & Role : papier texturé, encre noire, accent bleu, Courier Prime, Anton, Special Elite et couleurs des facettes. Icône officielle reprise du SVG du site.
-- Dossier de projet **dans le panneau CLAP!**, héros, ressources et documents consultables. Les données non encore mises en page apparaissent avec leurs libellés techniques.
-- Consultation des facettes et compétences des personnages ; association au compte du joueur par métadonnées Owlbear.
-- Discussion en direct et jets génériques `NdF`, `NdF+bonus`, `NdF-bonus`, partagés dans la discussion.
-- Tirage avec `crypto.getRandomValues` et rejet des valeurs créant un biais de modulo. Les jets sont calculés côté client : aucun mécanisme de certification anti-triche.
-- Sauvegarde IndexedDB du projet, de la sélection et des 200 derniers messages, séparée par salle et navigateur.
-- Partage explicite du projet par le MJ via Broadcast, découpé en petits messages sous la limite Owlbear de 16 Ko. Réception acceptée uniquement depuis une connexion identifiée comme MJ par Owlbear.
+## Vérifications et limites
 
-## Limites et confidentialité
+Les tests utilisent le vrai moteur et trois participants simulés : attribution, inventaire, messages publics, confidentialité des murmures et fiches, demandes de jets, export et réimport de la salle. Des tests distincts couvrent les rôles, la signalisation, la fermeture/réouverture du panneau et les projets de plus de 32 Mo.
 
-**Le partage transmet l’intégralité du projet aux joueurs présents, y compris les notes et les documents. Préparer une copie sans secrets de MJ avant de partager.** L’import seul ne publie rien ; les demandes des joueurs ne déclenchent jamais de partage automatique.
+Ces tests simulent le transport RTC. Une validation dans une vraie salle Owlbear avec plusieurs navigateurs reste nécessaire ; aucun test réel de connexion sur des réseaux distincts n’a encore été effectué. La configuration intégrée utilise STUN et n’ajoute pas de relais TURN : certains réseaux peuvent empêcher une connexion WebRTC directe. Les quotas de stockage et la mémoire du navigateur restent applicables.
 
-- Prototype non encore validé dans une salle réelle à plusieurs joueurs. Compilation et tests unitaires ne remplacent pas cet essai.
-- Le panneau doit rester ouvert pour recevoir le chat ou un projet. Les retardataires doivent demander un nouveau partage au MJ. Les messages manqués ne sont pas récupérés.
-- Pas de stockage central : le cache local ne se synchronise pas entre appareils. La persistance partagée et l’historique commun seront une étape suivante.
-- Aucune limite de taille imposée aux archives ou aux projets partagés. La mémoire et le quota de stockage du navigateur restent les limites pratiques ; les transferts volumineux peuvent être longs. Pas de reprise automatique : le MJ peut relancer le partage.
-- Les fiches sont consultables ; leur édition et les mécaniques propres aux dés CLAP! restent à ajouter.
-- Pas encore d’import des images ou scènes dans les dossiers natifs de la bibliothèque Owlbear.
-- La sélection d’une fiche est déclarative ; aucun verrou d’attribution exclusif n’est implémenté.
-- Les push sur `main` publient cette extension sur GitHub Pages si Pages est activé. Aucun projet importé dans le navigateur ne fait partie de ce déploiement.
-
-## Dépendances
-
-Le SDK Owlbear 3.1 utilise `uuid` 9. Une surcharge ciblée vers `uuid` 11.1.1+ corrige l’avis de sécurité npm ; les usages SDK vérifiés sont les imports ESM de `v4()`, conservés par cette version. Valider aussi le SDK en salle réelle avant diffusion.
-
-## Références
-
-- [Extensions et manifeste](https://docs.owlbear.rodeo/extensions/getting-started/)
-- [Broadcast : événements éphémères](https://docs.owlbear.rodeo/extensions/apis/broadcast/)
-- [Joueurs et métadonnées](https://docs.owlbear.rodeo/extensions/apis/player/)
-- [Import des images et scènes](https://docs.owlbear.rodeo/extensions/apis/assets/)
+Le workflow GitHub Actions compile, teste, vérifie les fichiers et publie GitHub Pages à chaque push sur `main`.

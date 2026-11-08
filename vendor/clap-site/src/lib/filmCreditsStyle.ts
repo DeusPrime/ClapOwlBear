@@ -1,0 +1,11 @@
+export const filmCreditsCss = `.book-page[data-dark-background] .book-content,.book-page[data-dark-background] .book-content :is(h1,h2,h3,h4,h5,p,li,span,strong,em){color:#fff}.book-page[data-backcover] .book-content{height:auto;min-height:0;max-height:185mm;margin-top:65mm;padding:8mm;background:rgba(0,0,0,.6);border:1pt solid #000;text-align:left}.book-qr-label{position:absolute;top:calc(100% + 3mm);left:0;width:100%;text-align:center;color:#fff;font-family:"Courier Prime",monospace;font-size:18pt;font-weight:700;text-shadow:0 1px 3px #000}.book-page[data-frontmatter="credits"] .book-content{text-align:center;overflow:visible}
+.book-page[data-frontmatter="credits"] [data-film-credit-block]{position:absolute;left:0;width:100%;text-align:center}
+.book-page[data-frontmatter="credits"] [data-film-credit-block="author"]{top:191mm}
+.book-page[data-frontmatter="credits"] [data-film-credit-block="author"] p{font-family:"Courier Prime",monospace;font-size:18pt}
+.book-page[data-frontmatter="credits"] [data-film-credit-block="copyright"]{top:auto;bottom:-10mm}
+.book-page[data-frontmatter="credits"] [data-film-credit-block="copyright"] p{font-family:"LM Mono Light 10",monospace;font-size:12pt;font-weight:700;line-height:1.35;margin:0}
+.book-page[data-frontmatter="credits"] [data-film-credit-block="community"]{top:146mm}
+.book-page[data-frontmatter="credits"] [data-film-credit-block="community"] h3{margin:0 0 6mm}
+.book-page[data-frontmatter="credits"] [data-film-credit-block="community"] p{font-family:"LM Mono Light 10",monospace;font-size:12pt}
+.book-page[data-frontmatter="credits"] [data-film-credit-block="title"]{top:41mm}.book-page[data-frontmatter="credits"] [data-film-credit-block="title"] h2{font-size:28pt!important}.book-page[data-frontmatter="credits"] [data-film-credit-block="title"] p{font-family:"Courier Prime",monospace;font-size:16pt}.book-page[data-frontmatter="community"] [data-film-credit-block="community"]{position:absolute;top:66mm;left:0;width:100%;text-align:center}.book-page[data-frontmatter="community"] h3{margin:0 0 6mm}.book-page[data-frontmatter="community"] p{font-size:12pt}.book-page[data-frontmatter="thanks"] h2{margin:0 0 8mm}
+.book-page[data-frontmatter="thanks"] h2:not(:first-child){margin-top:18mm}`;

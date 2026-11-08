@@ -1,0 +1,256 @@
+/* Shared interface design. Game artwork, card geometry and navigation stay in their existing components. */
+html.clap-interface body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background-image: none;
+  background-color: hsl(var(--paper));
+  -webkit-font-smoothing: antialiased;
+}
+html.clap-interface body::before { opacity: .08; }
+
+/* Game cards retain their original typefaces, geometry, artwork and controls. */
+.clap-interface :is(.hero-card-board, .resource-card-preview-scale, .resource-detail-card) {
+  font-family: "Courier Prime", "Courier New", monospace;
+}
+.clap-interface .typewriter:not(:where(.hero-card-board *, .resource-card-preview-scale *, .resource-detail-card *)) {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: .045em;
+}
+.clap-interface :is(h1,h2,h3):not(:where(.hero-card-board *, .resource-card-preview-scale *, .resource-detail-card *)) {
+  letter-spacing: .015em;
+}
+
+/* Existing application and public-site headers, with the same content. */
+.clap-interface #root > :is(div, header) > header,
+.clap-interface .character-editor-page > header,
+.clap-interface header.fixed,
+.clap-interface header.sticky {
+  background-color: hsl(var(--paper) / .98);
+  border-color: hsl(var(--ink) / .13);
+  box-shadow: 0 3px 18px hsl(var(--ink) / .035);
+}
+.clap-interface header > .container { gap: 1rem; }
+.clap-interface header nav a { font-size: .76rem; letter-spacing: .045em; }
+
+/* Restyle actual controls, excluding everything rendered inside game cards. */
+.clap-interface :is(button,a)[class*="border-2"]:not(:where(.hero-card-board *, .resource-card-preview-scale *, .resource-detail-card *)) {
+  border-width: 1px;
+  border-radius: 8px;
+  border-color: hsl(var(--ink) / .18);
+  box-shadow: 0 2px 5px hsl(var(--ink) / .035);
+  letter-spacing: .025em;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.clap-interface :is(button,a)[class*="bg-accent"]:not(:where(.hero-card-board *, .resource-card-preview-scale *, .resource-detail-card *)) {
+  border-color: hsl(var(--accent));
+  box-shadow: 0 3px 10px hsl(var(--accent) / .13);
+}
+.clap-interface :is(button,a).rounded-full { border-radius: 999px; }
+
+/* Shared buttons use the same recipe as the surrounding interface, including
+   room actions, dialogs and portaled menus. Card controls remain untouched. */
+.clap-interface [data-slot="button"]:not(:where(.hero-card-board *, .resource-card-preview-scale *, .resource-detail-card *)) {
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .025em;
+  line-height: 1.4;
+  box-shadow: 0 2px 5px hsl(var(--ink) / .035);
+}
+.clap-interface [data-slot="button"][data-variant="default"] {
+  background: hsl(var(--accent));
+  border-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  box-shadow: 0 3px 10px hsl(var(--accent) / .13);
+}
+.clap-interface [data-slot="button"][data-variant="default"]:hover:not(:disabled) {
+  background: hsl(var(--accent) / .9);
+}
+.clap-interface [data-slot="button"][data-variant="outline"] {
+  background: hsl(var(--card));
+  border-color: hsl(var(--ink) / .18);
+  color: hsl(var(--foreground));
+}
+.clap-interface [data-slot="button"][data-variant="outline"]:hover:not(:disabled) {
+  background: hsl(var(--ink) / .04);
+  border-color: hsl(var(--accent) / .35);
+  color: hsl(var(--foreground));
+}
+.clap-interface [data-slot="button"][data-variant="secondary"] {
+  background: hsl(var(--muted));
+  border-color: hsl(var(--ink) / .1);
+  color: hsl(var(--foreground));
+}
+.clap-interface [data-slot="button"][data-variant="secondary"]:hover:not(:disabled) {
+  background: hsl(var(--secondary));
+}
+.clap-interface [data-slot="button"][data-variant="destructive"] {
+  background: hsl(var(--destructive));
+  border-color: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+}
+.clap-interface [data-slot="button"][data-variant="destructive"]:hover:not(:disabled) {
+  background: hsl(var(--destructive) / .9);
+}
+.clap-interface [data-slot="button"]:is([data-variant="ghost"], [data-variant="link"]) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.clap-interface [data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+  background: hsl(var(--ink) / .04);
+}
+.clap-interface [data-slot="button"][data-variant="link"] { color: hsl(var(--accent)); }
+.clap-interface [data-slot="button"][data-size="icon"] { width: 44px; }
+.clap-interface [data-slot="button"]:focus-visible {
+  outline: 2px solid hsl(var(--accent) / .65);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px hsl(var(--accent) / .12);
+}
+.clap-interface [data-slot="button"]:disabled { box-shadow: none; }
+.clap-interface :is(input,textarea,select):not(:where(.hero-card-board *, .resource-card-preview-scale *, .resource-detail-card *)) {
+  border-width: 1px;
+  border-color: hsl(var(--ink) / .19);
+  border-radius: 8px;
+  background-color: hsl(var(--card));
+  font-family: inherit;
+}
+.clap-interface :is(input,textarea,select):focus-visible:not(:where(.hero-card-board *, .resource-card-preview-scale *, .resource-detail-card *)) {
+  outline: 2px solid hsl(var(--accent) / .45);
+  outline-offset: 2px;
+}
+.clap-interface label:has(> input[type="search"]) {
+  border-width: 1px;
+  border-color: hsl(var(--ink) / .19);
+  border-radius: 8px;
+  background: hsl(var(--card));
+}
+.clap-interface label > input[type="search"] {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Keep the existing Héros / Ressources / Outils navigation and destinations. */
+.clap-interface nav:has(> a[href="/characters"]):has(> a[href="/ressources"]):has(> a[href="/outils"]) {
+  border-color: hsl(var(--ink) / .13);
+  gap: .5rem;
+}
+.clap-interface nav:has(> a[href="/characters"]):has(> a[href="/ressources"]):has(> a[href="/outils"]) > a {
+  border-color: transparent;
+  box-shadow: none;
+  font-size: .72rem;
+  letter-spacing: .04em;
+}
+.clap-interface nav:has(> a[href="/characters"]):has(> a[href="/ressources"]):has(> a[href="/outils"]) > a:not([aria-current="page"]) {
+  color: hsl(var(--foreground) / .65);
+  background: transparent;
+}
+.clap-interface nav:has(> a[href="/characters"]):has(> a[href="/ressources"]):has(> a[href="/outils"]) > a[aria-current="page"] {
+  background: hsl(var(--accent) / .09);
+  border-color: hsl(var(--accent) / .15);
+  color: hsl(var(--accent));
+}
+
+/* The real project drawer, dialogs and action menus keep every existing item. */
+.clap-interface [role="dialog"] {
+  border-width: 1px;
+  border-color: hsl(var(--ink) / .15);
+  box-shadow: 0 16px 64px hsl(var(--ink) / .12);
+}
+.clap-interface [role="dialog"]:not([data-side]) { border-radius: 12px; }
+.clap-interface [role="menu"] {
+  padding: .5rem;
+  border-width: 1px;
+  border-color: hsl(var(--ink) / .15);
+  border-radius: 9px;
+  box-shadow: 0 10px 35px hsl(var(--ink) / .1);
+}
+.clap-interface [role="menuitem"] { border-radius: 5px; min-height: 42px; }
+.clap-interface [role="dialog"] nav a,
+.clap-interface [role="dialog"] button[class*="min-h-11"] { border-radius: 7px; }
+.clap-interface [role="dialog"] section { border-color: hsl(var(--ink) / .09); }
+
+/* No grid or card dimension changes: only soften their outer UI containers. */
+.clap-interface .paper-card:not(:where(.hero-card-board *, .resource-card-preview-scale *, .resource-detail-card *)) {
+  border-width: 1px;
+  border-color: hsl(var(--ink) / .15);
+  border-radius: 9px;
+  box-shadow: 0 4px 16px hsl(var(--ink) / .04);
+}
+.clap-interface .btn-clap {
+  border-width: 1px;
+  border-radius: 8px;
+  letter-spacing: .045em;
+  box-shadow: 0 4px 14px hsl(var(--accent) / .12);
+}
+.clap-interface .btn-clap:hover { transform: translateY(-1px); box-shadow: 0 5px 18px hsl(var(--accent) / .17); }
+.clap-interface .btn-ghost-clap { border-width: 1px; border-radius: 8px; letter-spacing: .045em; }
+.clap-interface .room-chat {
+  border-width: 1px;
+  border-color: hsl(var(--ink) / .14);
+  border-radius: 9px;
+  background-color: hsl(var(--card));
+  overflow: hidden;
+}
+.clap-interface .room-chat :is(.room-chat-heading,.room-chat-composer) { border-color: hsl(var(--ink) / .1); }
+.clap-interface .room-chat-messages article { border-radius: 8px; border-color: hsl(var(--ink) / .08); }
+.clap-interface .room-chat-heading h2 { font-size: 1.7rem; }
+.clap-interface .room-chat-heading p { line-height: 1.6; }
+.clap-interface .room-chat-composer { background: hsl(var(--paper) / .5); }
+.clap-interface nav[aria-label="Navigation de la fiche"] {
+  border-top-width: 1px;
+  border-color: hsl(var(--ink) / .13);
+  box-shadow: 0 -3px 18px hsl(var(--ink) / .04);
+}
+.clap-interface nav[aria-label="Navigation de la fiche"] button {
+  border-radius: 7px;
+  border-width: 1px;
+  box-shadow: none;
+}
+.clap-interface nav[aria-label="Navigation de la fiche"] button[aria-current="page"] {
+  background: hsl(var(--accent) / .1);
+  border-color: hsl(var(--accent) / .14);
+  color: hsl(var(--accent));
+}
+@media (min-width:640px) {
+  .clap-interface main.container > nav:has(> a[href="/ressources"]) { margin-bottom: 2rem; }
+}
+@media (max-width:639px) {
+  .clap-interface nav:has(> a[href="/ressources"]):has(> a[href="/outils"]) {
+    box-shadow: 0 -3px 18px hsl(var(--ink) / .04);
+    border-top-width: 1px;
+  }
+}
+@media (max-width:767px) {
+  .clap-interface .room-mj-chat > .room-chat {
+    padding-bottom: var(--mj-composer-height, 15rem);
+  }
+  .clap-interface .room-mj-chat .room-chat-messages {
+    max-height: max(0px, calc(100dvh - var(--mj-messages-top, 0px) - var(--mj-composer-height, 15rem) - var(--mj-tabs-height, 73px)));
+  }
+  .clap-interface .room-mj-chat .room-chat-composer {
+    position: fixed;
+    inset-inline: 0;
+    bottom: var(--mj-tabs-height, calc(65px + max(env(safe-area-inset-bottom), .5rem)));
+    z-index: 20;
+    padding: .75rem 1rem;
+    background: hsl(var(--paper) / .98);
+    box-shadow: 0 -3px 18px hsl(var(--ink) / .05);
+    backdrop-filter: blur(12px);
+  }
+  .clap-interface .room-mj-chat .room-chat-composer textarea { resize: none; }
+}
+
+/* Keep the chosen die visible over the shared button styling. */
+.clap-interface [role="dialog"] button[data-die-choice] {
+  border: 2px solid transparent;
+  box-shadow: none;
+}
+.clap-interface [role="dialog"] button[data-die-choice][aria-pressed="true"] {
+  border-color: currentColor;
+  box-shadow: inset 0 0 0 1px currentColor;
+  background-color: color-mix(in srgb, currentColor 14%, transparent);
+}

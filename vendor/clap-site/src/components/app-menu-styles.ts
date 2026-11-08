@@ -1,0 +1,2 @@
+﻿export const appMenuRow = "flex min-h-11 w-full min-w-0 items-center gap-3 whitespace-nowrap rounded-sm px-3 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-ink/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink";
+export const appMenuHeading = "mb-2 px-3 typewriter text-[11px] font-bold uppercase tracking-[0.18em] text-foreground/55";

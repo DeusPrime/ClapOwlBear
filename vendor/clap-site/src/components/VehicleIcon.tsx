@@ -1,0 +1,27 @@
+import type { SVGProps } from "react";
+
+type VehicleIconProps = SVGProps<SVGSVGElement> & {
+  size?: number;
+};
+
+const VehicleIcon = ({ size = 24, style, ...props }: VehicleIconProps) => (
+  <svg
+    aria-hidden="true"
+    width={size}
+    height={Math.round(size * 25 / 30)}
+    viewBox="0 0 30 25"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    style={{ flexShrink: 0, ...style }}
+    {...props}
+  >
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M28.7964 10.1782V25H25.3027V22.7097H4.69727V25H1.20361V10.1782H0V7.89996H2.93945L4.57764 2.84476C5.06104 1.35338 5.8667 0 7.44385 0H23.1641C24.7412 0 25.6494 1.32675 26.0303 2.84234L27.2974 7.89754H29.9976V10.1758H28.7964V10.1782ZM9.76807 18.1363H20.0879V20.5501H9.76807V18.1363ZM2.37305 12.5145C5.00244 12.5968 6.61133 13.6887 7.02393 15.967H2.37305V12.5145ZM27.2949 12.5145C24.6655 12.5968 23.0566 13.6887 22.644 15.967H27.2949V12.5145ZM4.19434 7.89754H25.8057L24.8804 3.65824C24.6265 2.49613 23.8965 1.49138 22.6953 1.49138H7.74902C6.54785 1.49138 5.93262 2.52276 5.56397 3.65824L4.19434 7.89754Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+export default VehicleIcon;

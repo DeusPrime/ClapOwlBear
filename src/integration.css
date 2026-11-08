@@ -1,0 +1,58 @@
+﻿.owlbear-header {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  min-height: 60px;
+}
+.owlbear-header + nav a {
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+.owlbear-header + nav a[aria-current="page"] {
+  background: hsl(var(--accent) / 0.1);
+  color: hsl(var(--accent));
+  font-weight: 700;
+}
+.owlbear-room {
+  padding-bottom: 100px;
+}
+.owlbear-room .room-player-workspace > div > div > header {
+  position: relative;
+}
+.owlbear-room .room-mj-workspace {
+  padding-top: 8px;
+}
+.owlbear-room .room-player-waiting {
+  min-height: calc(100dvh - 130px);
+}
+.container {
+  width: 100%;
+  max-width: 1400px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+#app > header ~ .studio-page > header,
+#app > header ~ div > header.fixed {
+  position: relative;
+}
+@media (max-width: 639px) {
+  .studio-page > main {
+    padding-top: 24px !important;
+  }
+  .owlbear-header {
+    position: relative;
+  }
+  .room-player-workspace .character-editor-page > header {
+    position: relative !important;
+  }
+  .room-player-workspace .character-editor-page {
+    padding-top: 0 !important;
+  }
+}
+[hidden] {
+  display: none !important;
+}
