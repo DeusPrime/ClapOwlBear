@@ -1,18 +1,18 @@
 {
   "name": "CLAP! Studio",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "manifest_version": 1,
   "description": "Projets CLAP!, fiches de personnages, jets publics et discussion de salle.",
   "author": "DeusPrime",
-  "icon": "/ClapOwlBear/icon.svg?v=0.2.10",
+  "icon": "/ClapOwlBear/icon.svg?v=0.2.11",
   "action": {
     "title": "CLAP! Studio",
-    "icon": "/ClapOwlBear/icon.svg?v=0.2.10",
-    "popover": "/ClapOwlBear/index.html",
+    "icon": "/ClapOwlBear/icon.svg?v=0.2.11",
+    "popover": "/ClapOwlBear/index.html?v=0.2.11",
     "width": 1000,
     "height": 850
   },
-  "background_url": "/ClapOwlBear/background.html",
+  "background_url": "/ClapOwlBear/background.html?v=0.2.11",
   "permissions": [
     {
       "name": "clipboard-write",

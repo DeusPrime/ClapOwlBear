@@ -7,7 +7,7 @@ const start = source.indexOf("  private async api<T>("),
   stop = source.indexOf("  list() {", start);
 if (start < 0 || stop < 0) throw new Error("Upstream API boundary changed");
 source =
-  "import {callRoomApi,sharedRoomClient} from '@owlbear/runtime/client';\n" +
+  "import {callRoomApi,sharedRoomClient,createRoomPeer} from '@owlbear/runtime/client';\n" +
   source.slice(0, start) +
   `  private async api<T>(path:string,body:unknown,session=this.state.session):Promise<T>{return callRoomApi<T>(path,body,session);}
 ` +
@@ -30,6 +30,7 @@ source = source.replace(
   async unlinkSiteRoom(){this.integrationChanging=true;try{const name=this.state.session?.name||'MJ Owlbear';if(this.state.session)await this.leave();await this.api('/integration/unlink',{},null);await this.enter(name,undefined,undefined,{title:'Salle CLAP!'});}finally{this.integrationChanging=false;}}
   async sendChat(text: string, target?: string) {`,
 );
+source = source.replace("new RTCPeerConnection({ iceServers: this.iceServers })", "createRoomPeer({ iceServers: this.iceServers })");
 source = source.replace(
   "export const roomClient = new RoomClient();",
   "export const roomClient = sharedRoomClient(() => new RoomClient());",

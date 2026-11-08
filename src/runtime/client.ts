@@ -1,3 +1,6 @@
+let peerFactory: ((config: RTCConfiguration) => RTCPeerConnection) | undefined;
+export const configurePeerFactory = (factory: (config: RTCConfiguration) => RTCPeerConnection) => { peerFactory = factory; };
+export const createRoomPeer = (config: RTCConfiguration) => peerFactory ? peerFactory(config) : new RTCPeerConnection(config);
 import type { RoomSession } from "@/lib/roomProtocol";
 
 type Api = (
@@ -89,6 +92,7 @@ export const commands = new Set([
   "assignCharacter",
   "selectCharacter",
   "selectRoomHero",
+  "requestRoomHero",
   "changePassword",
   "kickPlayer",
   "linkResource",

@@ -1,3 +1,5 @@
+declare const __APP_VERSION__: string;
+const clientVersion = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "development";
 import { siteRoomApi, validateSiteLink, type SiteLink } from "./site-service";
 import OBR from "@owlbear-rodeo/sdk";
 import type { Player } from "@owlbear-rodeo/sdk";
@@ -45,12 +47,14 @@ export async function sdkPort(): Promise<RodeoPort> {
     roomMetadata: () => OBR.room.getMetadata(),
     setRoomMetadata: (v) => OBR.room.setMetadata(v),
     setPlayerMetadata: (v) => OBR.player.setMetadata(v),
-    send: (c, d) => OBR.broadcast.sendMessage(c, d),
+    send: (c, d) => OBR.broadcast.sendMessage(c, d, { destination: "REMOTE" }),
     onSignal: (cb) => OBR.broadcast.onMessage(SIGNAL, cb),
   };
 }
 export class OwlbearRoomService {
   paused = false;
+  linked = false;
+  notice = "";
   readonly code: string;
   private sequence = 0;
   private signals: RoomSignal[] = [];
@@ -82,7 +86,7 @@ export class OwlbearRoomService {
         .catch(() => {});
     });
     await this.port.setPlayerMetadata({
-      [PLAYER_KEY]: { active: false, instance: "" },
+      [PLAYER_KEY]: { active: false, instance: "", transport: "native-v1", version: clientVersion },
     });
   }
   stop() {
@@ -194,6 +198,7 @@ export class OwlbearRoomService {
       }
     }
     const linked = (await this.descriptor())?.site;
+    this.linked = Boolean(linked);
     if (linked) {
       if (path === "/leave") this.paused = true;
       return siteRoomApi(this.port, linked, path, body, session);
@@ -228,7 +233,7 @@ export class OwlbearRoomService {
         this.error("La partie CLAP! est complète (16 participants).", 409);
       this.paused = false;
       await this.port.setPlayerMetadata({
-        [PLAYER_KEY]: { active: true, instance: this.localInstance },
+        [PLAYER_KEY]: { active: true, instance: this.localInstance, transport: "native-v1", version: clientVersion },
       });
       return {
         room: this.code,
@@ -249,10 +254,14 @@ export class OwlbearRoomService {
       if (this.localInstance !== body.instance) {
         this.localInstance = body.instance;
         await this.port.setPlayerMetadata({
-          [PLAYER_KEY]: { active: true, instance: body.instance },
+          [PLAYER_KEY]: { active: true, instance: body.instance, transport: "native-v1", version: clientVersion },
         });
       }
-      const members = (await this.players())
+      const party = await this.players();
+      const outdated = party.find(player => player.id !== self.id && (player.metadata[PLAYER_KEY] as any)?.active && (player.metadata[PLAYER_KEY] as any)?.transport !== 'native-v1');
+      const notice = outdated ? 'Le participant « '+outdated.name.slice(0,40)+' » utilise une ancienne version de CLAP!. Rechargez l’extension chez tous les participants.' : '';
+      if (notice !== this.notice) { this.notice=notice;if(typeof window!=='undefined')window.dispatchEvent(new Event('clap-integration-state')); }
+      const members = party
         .filter(
           (p) =>
             p.id === self.id ||
@@ -311,7 +320,7 @@ export class OwlbearRoomService {
       this.paused = true;
       if (host) await this.save({ ...d, closed: true });
       await this.port.setPlayerMetadata({
-        [PLAYER_KEY]: { active: false, instance: this.localInstance },
+        [PLAYER_KEY]: { active: false, instance: this.localInstance, transport: "native-v1", version: clientVersion },
       });
       return { ok: true };
     }

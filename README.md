@@ -1,4 +1,4 @@
-# CLAP! pour Owlbear Rodeo — 0.2.10
+# CLAP! pour Owlbear Rodeo — 0.2.11
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
@@ -11,6 +11,14 @@ Cette version ajoute `background_url`. Faire recharger le manifeste dans Owlbear
 Chaque participant doit avoir l’extension active dans la salle. Le moteur d’arrière-plan du MJ crée automatiquement la partie, les joueurs la rejoignent avec leurs identités Owlbear distinctes. Aucun identifiant de salle CLAP!, compte du site ou mot de passe supplémentaire à saisir.
 
 La fermeture du panneau ne ferme pas la partie : la page d’arrière-plan conserve la connexion tant que l’onglet Owlbear reste ouvert. Le MJ conserve l’état et les sauvegardes sur son navigateur ; les joueurs disposent de leur propre fiche et de leurs ressources locales.
+
+## Connexion et invités 0.2.11
+
+Les parties natives transmettent maintenant les données par le bus d’Owlbear, sans dépendre d’une connexion WebRTC directe entre navigateurs. Les échanges sont chiffrés de bout en bout (ECDH et AES-GCM), découpés, accusés et réessayés si nécessaire ; les autres participants ne peuvent pas lire les fiches privées qui ne leur sont pas destinées.
+
+Un invité en navigation privée reçoit une nouvelle identité Owlbear. Dans Mon héros, il choisit **Récupérer un héros → Demander au MJ**. Le MJ autorise la récupération dans Héros et la fiche conservée dans la salle reprend avec sa progression. Le nom seul ne donne aucun accès.
+
+Le toast reçoit les données par le bus local d’Owlbear et confirme son affichage avant le décompte de fermeture. Une notification courte et un message de diagnostic remplacent un échec silencieux. Les URL du manifeste sont versionnées pour recharger les moteurs et les panneaux ; tous les participants doivent passer à cette version.
 
 ## Dés et notifications 0.2.10
 

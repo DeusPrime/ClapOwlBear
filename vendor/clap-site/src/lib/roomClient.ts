@@ -1,4 +1,4 @@
-import {callRoomApi,sharedRoomClient} from '@owlbear/runtime/client';
+import {callRoomApi,sharedRoomClient,createRoomPeer} from '@owlbear/runtime/client';
 import type { RollVisual } from "./rollVisual";
 import { localizeText } from '@/i18n/localize';
 import { selectDirectory, loadDirectories } from "./directories";
@@ -28,7 +28,7 @@ type Snapshot = {
   roomResources?: BundledResource[];
   availableHeroes?: { id: string; name: string; ownerId?: string }[];
   roomHeroes: Character[];
-  heroProposals: (Extract<RoomMessage, { kind?: 'hero-proposal' }> & { playerId: string })[];
+  heroProposals: (Extract<RoomMessage, { kind?: 'hero-proposal' }> & { playerId: string; recovery?: boolean })[];
   pendingHeroProposal?: string;
   exitNotice?: string;
   savedSheets?: RoomArchive['sheets'];
@@ -56,7 +56,7 @@ export class RoomClient {
   private assignments = new Map<string, Extract<RoomMessage, { kind?: "assign-sheet" }>>();
   private approvedSheetIds = new Map<string, string>();
   private addingHeroes = new Map<string, Promise<Character>>();
-  private proposal?: Extract<RoomMessage, { kind?: 'hero-proposal' }>;
+  private proposal?: Extract<RoomMessage, { kind?: 'hero-proposal' | 'hero-recover' }>;
   private receivingAssignments = new Set<string>();
   private peers = new Map<string, Peer>();
   private seenRolls = new Set<string>();
@@ -271,7 +271,7 @@ export class RoomClient {
     const transport = this.peers.get(proposal.playerId)?.transport;
     if (!transport || transport.channel.readyState !== 'open') throw new Error('Le joueur doit être connecté.');
     if (accepted) {
-      const hero = await this.addRoomHero(proposal.character as Character, proposal.resources as BundledResource[]);
+      const hero = proposal.recovery ? proposal.character as Character : await this.addRoomHero(proposal.character as Character, proposal.resources as BundledResource[]);
       await this.assignCharacter(proposal.playerId, hero.id);
     }
     transport.send({ kind: 'hero-proposal-result', id, accepted });
@@ -562,6 +562,16 @@ export class RoomClient {
     this.update({ pendingHeroProposal: id });
     toast.info(localizeText('Proposition envoyée au MJ. Ton héros actuel est conservé en attendant.'));
   }
+  async requestRoomHero(characterId: string) {
+    const session = this.state.session;
+    const host = this.state.members.find(member => member.role === 'mj');
+    const transport = host && this.peers.get(host.id)?.transport;
+    if (session?.role !== 'player' || !transport || transport.channel.readyState !== 'open') throw new Error('Attends la connexion du MJ.');
+    const message: Extract<RoomMessage, { kind?: 'hero-recover' }> = { kind: 'hero-recover', id: crypto.randomUUID(), characterId };
+    if (!transport.send(message)) throw new Error('Envoi au MJ impossible.');
+    this.proposal = message;
+    this.update({ pendingHeroProposal: message.id });
+  }
   async selectRoomHero(characterId: string) {
     const session = this.state.session;
     const host = this.state.members.find(member => member.role === 'mj');
@@ -584,7 +594,7 @@ export class RoomClient {
   }
   private newPeer(member: RoomMember, connection: string) {
     this.closePeer(member.id);
-    const pc = new RTCPeerConnection({ iceServers: this.iceServers });
+    const pc = createRoomPeer({ iceServers: this.iceServers });
     const peer: Peer = { pc, connection, instance: member.instance, started: Date.now(), sheet: "" };
     this.peers.set(member.id, peer);
     const attach = (channel: RTCDataChannel) => {
@@ -895,6 +905,14 @@ export class RoomClient {
     const source = this.state.members.find(value => value.id === sender);
     if (!source) return;
     if (message.kind !== "game-state" && session.gameGeneration && message.roomGeneration !== session.gameGeneration) return;
+    if (message.kind === 'hero-recover') {
+      if (session.role !== 'mj' || source.role !== 'player') return;
+      if (this.state.heroProposals.some(proposal => proposal.id === message.id)) return;
+      const character = Object.values(this.archive?.sheets || {}).find(hero => hero.id === message.characterId) || this.archive?.heroes.find(hero => hero.id === message.characterId);
+      if (!character) { this.peers.get(sender)?.transport?.send({ kind: 'hero-proposal-result', id: message.id, accepted: false }); return; }
+      this.update({ heroProposals: [...this.state.heroProposals.filter(proposal => proposal.playerId !== sender), { kind: 'hero-proposal', id: message.id, playerId: sender, character, resources: [], recovery: true }] });
+      return;
+    }
     if (message.kind === 'hero-select') {
       if (session.role !== 'mj' || source.role !== 'player') return;
       this.resourceQueue = this.resourceQueue.then(async () => {

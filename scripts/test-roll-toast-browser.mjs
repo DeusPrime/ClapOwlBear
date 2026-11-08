@@ -8,11 +8,14 @@ const require = createRequire(resolve('../../clap-cinematic-quest/package.json')
 const { chromium } = require('playwright');
 function harness() {
   let metadata = {}, roomMetadata = {};
+  const subscriptions = new Map();
   addEventListener('message', event => {
     const message = event.data;
+    if(message?.id==='OBR_BROADCAST_SUBSCRIBE'){const c=message.data.channel;if(!subscriptions.has(c))subscriptions.set(c,new Set());subscriptions.get(c).add(event.source);return;}
+    if(message?.id==='OBR_BROADCAST_SEND_MESSAGE'&&message.data.options?.destination==='LOCAL'){for(const frame of subscriptions.get(message.data.channel)||[])frame.postMessage({id:'OBR_BROADCAST_MESSAGE_'+message.data.channel,data:{connectionId:'connection-host',data:message.data.data}},location.origin);}
     if(message?.id==='OBR_MODAL_OPEN') {
       window.__qaModal = message.data;
-      const frame=document.createElement('iframe');frame.id='toast';frame.src=message.data.url;
+      const frame=document.createElement('iframe');frame.id='toast';const u=new URL(message.data.url);u.searchParams.set('obrref',btoa(location.origin+' full-import-room'));frame.src=u;frame.onload=()=>frame.contentWindow.postMessage({id:'OBR_READY',data:{ref:'qa-toast',userId:'host'}},location.origin);
       frame.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;border:0;pointer-events:none';document.body.append(frame);
     }
     if(message?.id==='OBR_MODAL_CLOSE')document.querySelector('#toast')?.remove();

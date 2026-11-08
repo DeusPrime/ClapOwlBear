@@ -76,7 +76,7 @@ try {
     assert.equal(rollToasts.length, 1, 'Public rolls must open the graphic toast over the Owlbear table');
     assert.equal(rollToasts[0].disablePointerEvents, true);
     assert.equal(rollToasts[0].hideBackdrop, true);
-    assert.ok(rollToasts[0].url.includes('roll-toast.html#'));
+    assert.ok(rollToasts[0].url.includes('roll-toast.html?'));
     assert.equal(notifications.length, 0, 'Do not duplicate graphic results with verbose text notifications');
     await command('setRollVisibility', [true]);
     await command('broadcastRoll', ['Secret roll', 'D6: 2', {}]);

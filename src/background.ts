@@ -1,8 +1,10 @@
+declare const __APP_VERSION__: string;
+import { createNativePeerBridge } from "./runtime/native-peer";
 import { createNativeRollToasts } from "./runtime/native-roll-toasts";
 import { rememberPlayerSession, rememberedPlayerSession } from "./runtime/player-session";
 import { watchPublicRolls } from "./runtime/roll-notifications";
 import OBR from "@owlbear-rodeo/sdk";
-import { configureRuntime, serveRoomClient } from "./runtime/client";
+import { configureRuntime, serveRoomClient, configurePeerFactory } from "./runtime/client";
 import { OwlbearRoomService, roomCode, sdkPort } from "./runtime/rodeo-service";
 
 if (OBR.isAvailable)
@@ -17,10 +19,19 @@ async function start() {
   await service.start();
   const channel = `clap-owlbear:${port.roomId}:${self.id}:${self.connectionId}`;
   configureRuntime({ background: true, channel }, service.api);
+  const bridge = createNativePeerBridge({ connectionId: self.connectionId, send: data => port.send("fr.clap.owlbear/v3/data", data), subscribe: callback => OBR.broadcast.onMessage("fr.clap.owlbear/v3/data", callback) });
+  configurePeerFactory(config => service.linked ? new RTCPeerConnection(config) : bridge.create());
   const { initializeDirectoryAssets } = await import("@/lib/directoryAssets");
   await initializeDirectoryAssets();
   const { roomClient } = await import("@/lib/roomClient");
-  const rollToasts = createNativeRollToasts(OBR.modal, new URL("roll-toast.html", location.href).href);
+  let toastError = '';
+  const rollToasts = createNativeRollToasts({
+    open: options => OBR.modal.open(options), close: id => OBR.modal.close(id), connectionId: self.connectionId,
+    listen: callback => OBR.broadcast.onMessage('fr.clap.owlbear/v3/toast', callback),
+    post: data => OBR.broadcast.sendMessage('fr.clap.owlbear/v3/toast',data,{destination:'LOCAL'}),
+    fallback: text => OBR.notification.show(text,'INFO'),
+    report: error => { toastError=error;window.dispatchEvent(new Event('clap-integration-state')); },
+  }, new URL('roll-toast.html?v='+__APP_VERSION__,location.href).href);
   const stopRollNotifications = watchPublicRolls(roomClient, rollToasts.show);
   const archiveKey = `clap-owlbear-archive:${port.roomId}:${self.id}`;
   let connecting = false,
@@ -34,7 +45,7 @@ async function start() {
       localStorage.setItem(archiveKey, s.localRoomId);
   };
   serveRoomClient(roomClient, channel, remember, () => ({
-    error: roomClient.snapshot().error || joinError,
+    error: roomClient.snapshot().error || joinError || toastError || service.notice,
   }));
   roomClient.subscribe(() => {
     void remember();
@@ -140,6 +151,7 @@ async function start() {
     () => {
       stopRollNotifications();
       rollToasts.stop();
+      bridge.stop();
       roomClient.stop();
       service.stop();
     },

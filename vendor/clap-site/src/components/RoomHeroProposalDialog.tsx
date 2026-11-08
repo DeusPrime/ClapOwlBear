@@ -23,7 +23,7 @@ export default function RoomHeroProposalDialog() {
     finally { setBusy(false); }
   }
   return <Dialog open={Boolean(proposal)}><DialogContent className="max-h-[90dvh] overflow-y-auto bg-paper [&>button]:hidden" onEscapeKeyDown={event => event.preventDefault()} onPointerDownOutside={event => event.preventDefault()}>
-    <DialogTitle>{localizeText("Demande de changement de héros")}</DialogTitle><DialogDescription>{localizeNode(room.members.find(member => member.id === proposal?.playerId)?.name || 'Un joueur')}{localizeText(" souhaite remplacer son héros.")}</DialogDescription>
+    <DialogTitle>{localizeText(proposal?.recovery ? "Récupérer un héros" : "Demande de changement de héros")}</DialogTitle><DialogDescription>{localizeNode(room.members.find(member => member.id === proposal?.playerId)?.name || 'Un joueur')}{localizeText(proposal?.recovery ? " demande à reprendre ce héros avec sa progression. Vérifie que cette fiche lui appartient avant d’autoriser." : " souhaite remplacer son héros.")}</DialogDescription>
     <div className="grid gap-3 sm:grid-cols-2"><Hero label={localizeText("Héros actuel")} hero={proposal ? room.sheets[proposal.playerId] || room.savedSheets?.[proposal.playerId] as Character : undefined} /><Hero label={localizeText("Héros proposé")} hero={proposal?.character as Character | undefined} /></div>
     {localizeNode(error && <p role="alert" className="text-sm text-destructive">{localizeNode(error)}</p>)}
     <div className="flex justify-end gap-3"><Button variant="outline" disabled={busy} onClick={() => void decide(false)}>{localizeText("Refuser")}</Button><Button disabled={busy} onClick={() => void decide(true)}>{localizeNode(busy ? 'En cours…' : 'Autoriser')}</Button></div>
