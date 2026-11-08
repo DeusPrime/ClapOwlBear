@@ -7,7 +7,7 @@ const start = source.indexOf("  private async api<T>("),
   stop = source.indexOf("  list() {", start);
 if (start < 0 || stop < 0) throw new Error("Upstream API boundary changed");
 source =
-  "import {callRoomApi,sharedRoomClient,createRoomPeer} from '@owlbear/runtime/client';\n" +
+  "import {sheetSignature} from '@owlbear/runtime/sheet-signature';\nimport {callRoomApi,sharedRoomClient,createRoomPeer} from '@owlbear/runtime/client';\n" +
   source.slice(0, start) +
   `  private async api<T>(path:string,body:unknown,session=this.state.session):Promise<T>{return callRoomApi<T>(path,body,session);}
 ` +
@@ -39,6 +39,9 @@ source = source.replace('    this.closePeer(member.id);\n    const pc', '    thi
 source = source.replace('this.closePeer(member.id); };', 'this.closePeer(member.id,"channel closed"); };');
 source = source.replace('this.closePeer(member.id);\n    };', 'this.closePeer(member.id,"transport "+pc.connectionState);\n    };');
 source = source.replace('if (!member?.online || member.instance !== peer.instance || (peer.transport?.channel.readyState !== "open" && Date.now() - peer.started > 30000)) this.closePeer(id);', 'if (!member?.online || member.instance !== peer.instance || (peer.transport?.channel.readyState !== "open" && Date.now() - peer.started > 30000)) this.closePeer(id,!member?.online?"participant offline":member.instance!==peer.instance?"participant instance changed":"negotiation timeout");');
+// Without resource-ID remapping, the GM already owns the exact assigned sheet.
+source = source.replace("this.peers.forEach(peer => { peer.sheet = ''; });", "const assignedCharacter=await getCharacter(character.id)||character;const assignedSignature=sheetSignature(roomCharacterSchema.parse({...assignedCharacter,portrait:assignedCharacter.portrait||undefined}));this.peers.forEach(peer => { peer.sheet = message.resources?.length ? '' : assignedSignature; });");
+source = source.replace('const message: RoomMessage = { kind: "sheet", character: parsed?.success ? parsed.data : null };\n      const json = JSON.stringify(message);', 'const message: RoomMessage = { kind: "sheet", character: parsed?.success ? parsed.data : null };\n      const json = sheetSignature(message.character);');
 source = source.replace("new RTCPeerConnection({ iceServers: this.iceServers })", "createRoomPeer({ iceServers: this.iceServers })");
 source = source.replace(
   "export const roomClient = new RoomClient();",
@@ -102,3 +105,8 @@ let heroAssignments = read(root + 'components/RoomHeroAssignments.tsx');
 heroAssignments = "import {copyConnectionDiagnostics,connectionError} from '@owlbear/runtime/client';\n" + heroAssignments;
 heroAssignments = heroAssignments.replace('{localizeText("En attente de connexion du joueur pour transmettre la fiche.")}</p>', '{localizeText("En attente de connexion du joueur pour transmettre la fiche.")} <button type="button" className="ml-2 underline" onClick={() => void copyConnectionDiagnostics()}>Copier le diagnostic connexion</button><span className="mt-1 block text-destructive">{connectionError()}</span></p>');
 save(root + 'components/RoomHeroAssignments.tsx',heroAssignments);
+
+let rollDialog = read(root + 'components/RollDialog.tsx');
+rollDialog = "import {afterRollPaint} from '@owlbear/runtime/after-roll-paint';\n" + rollDialog;
+rollDialog = rollDialog.replace('    void logRoll(entry);','    afterRollPaint(() => { void logRoll(entry); });');
+save(root + 'components/RollDialog.tsx',rollDialog);

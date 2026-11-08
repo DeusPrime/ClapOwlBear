@@ -1,3 +1,4 @@
+import {afterRollPaint} from '@owlbear/runtime/after-roll-paint';
 import type { RollVisual } from "@/lib/rollVisual";
 import RollOutcomeEffect from "./RollOutcomeEffect";
 import RollingDie from "./RollingDie";
@@ -362,7 +363,7 @@ export default function RollDialog({
     };
     const entry = { rollVisual, label: contextLabel ? `${contextLabel} · ${name}` : name, summary: details, id: crypto.randomUUID(), ...(requestId && !requestResolved.current ? { requestId } : {}) };
     pendingLog.current = entry;
-    void logRoll(entry);
+    afterRollPaint(() => { void logRoll(entry); });
   };
 
   async function logRoll(entry: NonNullable<typeof pendingLog.current>) {

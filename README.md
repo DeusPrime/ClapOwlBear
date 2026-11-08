@@ -1,4 +1,4 @@
-# CLAP! pour Owlbear Rodeo — 0.2.15
+# CLAP! pour Owlbear Rodeo — 0.2.16
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
@@ -11,6 +11,10 @@ Cette version ajoute `background_url`. Faire recharger le manifeste dans Owlbear
 Chaque participant doit avoir l’extension active dans la salle. Le moteur d’arrière-plan du MJ crée automatiquement la partie, les joueurs la rejoignent avec leurs identités Owlbear distinctes. Aucun identifiant de salle CLAP!, compte du site ou mot de passe supplémentaire à saisir.
 
 La fermeture du panneau ne ferme pas la partie : la page d’arrière-plan conserve la connexion tant que l’onglet Owlbear reste ouvert. Le MJ conserve l’état et les sauvegardes sur son navigateur ; les joueurs disposent de leur propre fiche et de leurs ressources locales.
+
+## Transferts et animation locale 0.2.16
+
+Les fragments déjà prêts sont regroupés avant compression, avec un plafond de 128 Ko UTF-8 et 64 trames. L’en-tête ne provoque plus un aller-retour seul. Sans carte liée à remapper, le joueur ne renvoie plus au MJ la fiche complète qu’il vient de recevoir ; les modifications ultérieures restent synchronisées. Le projet complet reste local au MJ ; le joueur reçoit sa fiche attribuée et les ressources liées. Les dés locaux disposent d’une image affichée avant la publication réseau ; une sécurité maintient l’envoi si le panneau passe en arrière-plan. Le test Chrome actionne le vrai bouton Lancer et vérifie que l’animation démarre avant la commande réseau.
 
 ## Cadence de transfert 0.2.15
 

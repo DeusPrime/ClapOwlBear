@@ -97,11 +97,15 @@ try{
   for(let offset=0;offset<pixels.data.length;offset+=65536)crypto.getRandomValues(pixels.data.subarray(offset,Math.min(offset+65536,pixels.data.length)));
   for(let i=3;i<pixels.data.length;i+=4)pixels.data[i]=255;ctx.putImageData(pixels,0,0);return canvas.toDataURL('image/png');
  });
+ for(const facet of Object.values(hero.facets))for(const skill of Object.keys(facet.skills))facet.skills[skill]=4;
  hero.nom='Returning guest hero';hero.notes='SECRET_ROOM_PROGRESS';hero.autresAccessoires=[{nom:'Keepsake',proprietes:'Preserve'}];
  const zip=await new JSZip().file('studio.json',JSON.stringify({format:'clap-studio',version:1,project:{id:'project-source',name:'Guest recovery QA'},heroes:[hero],resources:[],tools:[]})).generateAsync({type:'uint8array'});
  await call(host,'host','importProject',[Array.from(zip),undefined,true]);
  const heroId=(await call(host,'host','snapshot')).roomHeroes[0].id;await call(host,'host','assignCharacter',['guest-old',heroId]);
  try {await until(async()=> (await call(guest,'guest-old','snapshot')).session.characterId===heroId,'first hero assignment',90000);} catch(error) {console.log('HOST',JSON.stringify((await call(host,'host','snapshot')).connectionDiagnostics));console.log('GUEST',JSON.stringify((await call(guest,'guest-old','snapshot')).connectionDiagnostics));throw error;}
+ try {await call(guest,'guest-old','sendChat',['Personal sheet only QA']);} catch(error){console.log('HOST',JSON.stringify((await call(host,'host','snapshot')).connectionDiagnostics));console.log('GUEST',JSON.stringify((await call(guest,'guest-old','snapshot')).connectionDiagnostics));throw error;}
+ await until(async()=> (await call(host,'host','snapshot')).messages.some(m=>m.text==='Personal sheet only QA'),'small personal sync');
+ const guestBytes=events.filter(e=>e.player==='guest-old'&&e.channel==='fr.clap.owlbear/v3/data'&&e.data.type==='data').reduce((sum,e)=>sum+e.data.text.length,0);assert.ok(guestBytes<20000,'The player must not echo the assigned portrait back to the GM');
  await call(host,'host','sendChat',['Public chat across private contexts']);
  await until(async()=> (await call(guest,'guest-old','snapshot')).messages.some(m=>m.text==='Public chat across private contexts'),'chat synchronization');
  await contexts[1].close();players.delete('guest-old');
@@ -116,6 +120,13 @@ try{
  await host.frameLocator('#panel').getByRole('button',{name:'Autoriser',exact:true}).click();
  await until(async()=> (await call(returning,'guest-new','snapshot')).session.characterId===heroId,'approved recovery',90000);
  const recovered=await call(host,'host','snapshot');assert.equal(recovered.sheets['guest-new'].notes,'SECRET_ROOM_PROGRESS');assert.equal(recovered.sheets['guest-new'].autresAccessoires[0].nom,'Keepsake');
+
+ await call(host,'host','requestRoll',['guest-new','Local animation QA',[{facet:'corps',name:Object.keys(hero.facets.corps.skills)[0]},{facet:'corps',name:Object.keys(hero.facets.corps.skills)[1]}],8]);
+ const panel=returning.frameLocator('#panel');await panel.getByRole('button',{name:'Effectuer le jet',exact:true}).click();
+ await panel.locator('body').evaluate(()=>{window.__qaLocalAnimations=0;window.__qaAnimationsAtPublish=-1;const post=BroadcastChannel.prototype.postMessage;BroadcastChannel.prototype.postMessage=function(data){if(data?.method==='broadcastRoll')window.__qaAnimationsAtPublish=window.__qaLocalAnimations;return post.call(this,data);};const animate=Element.prototype.animate;Element.prototype.animate=function(...args){if(this.matches('[data-rolling-die]'))window.__qaLocalAnimations++;return animate.apply(this,args);};});
+ await panel.getByRole('button',{name:'Lancer',exact:true}).click();
+ await until(async()=>panel.locator('body').evaluate(()=>window.__qaLocalAnimations>0),'local dice animation');
+ await until(async()=>panel.locator('body').evaluate(()=>window.__qaAnimationsAtPublish>=0),'roll published after local animation');assert.ok(await panel.locator('body').evaluate(()=>window.__qaAnimationsAtPublish>0),'Local animation must start before network publication');assert.ok(await panel.locator('[data-rolling-die]').count()>0);
  await returning.evaluate(()=>document.querySelector('#panel').remove());
  await call(host,'host','broadcastRoll',['Force','D8 : 4',{public:true,rollVisual:{label:'Force',potential:5,outcome:'success',successes:4,dice:[{sides:8,value:4,kind:'diff',outcome:'success'}]}}]);
  await returning.frameLocator('#toast').getByText('Réussite · 4',{exact:true}).waitFor({timeout:15000});

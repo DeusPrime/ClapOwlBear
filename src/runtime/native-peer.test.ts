@@ -53,3 +53,13 @@ it('recovers from a transient SDK refusal without discarding the connection', as
   const a=createNativePeerBridge(wire('p')),b=createNativePeerBridge(wire('h'));const player=a.create(),host=b.create();const channel=player.createDataChannel('room');let incoming:RTCDataChannel|undefined;host.ondatachannel=e=>{incoming=e.channel;};
   try{await player.setLocalDescription();await host.setRemoteDescription(player.localDescription!);await host.setLocalDescription();await player.setRemoteDescription(host.localDescription!);await expect.poll(()=>incoming?.readyState).toBe('open');let result='';channel.onmessage=e=>{result=e.data;};incoming!.send('hero retained');await expect.poll(()=>result,{timeout:4000}).toBe('hero retained');expect(channel.readyState).toBe('open');expect(b.diagnostics().retries).toBe(1);expect(b.diagnostics().lastError).toBe('');}finally{a.stop();b.stop();}
 });
+
+it('batches synchronous resource frames without a header-only network round trip', async()=>{
+  const listeners=new Map<string,(event:any)=>void>();const packets:any[]=[];
+  const wire=(id:string)=>({connectionId:id,subscribe:(fn:any)=>{listeners.set(id,fn);return()=>{};},send:async(data:any)=>{packets.push({id,...data});for(const [other,fn]of listeners)if(other!==id)queueMicrotask(()=>fn({connectionId:id,data:structuredClone(data)}));}});
+  const a=createNativePeerBridge(wire('p')),b=createNativePeerBridge(wire('h'));const player=a.create(),host=b.create();const channel=player.createDataChannel('room');let incoming:RTCDataChannel|undefined;host.ondatachannel=e=>{incoming=e.channel;};
+  try {await player.setLocalDescription();await host.setRemoteDescription(player.localDescription!);await host.setLocalDescription();await player.setRemoteDescription(host.localDescription!);await expect.poll(()=>incoming?.readyState).toBe('open');const received:string[]=[];channel.onmessage=e=>received.push(e.data);
+    const frames=['size:96000',...Array.from({length:12},(_,i)=>'data:'+String(i%10).repeat(7900))];for(const frame of frames)incoming!.send(frame);
+    await expect.poll(()=>received.length,{timeout:5000}).toBe(frames.length);expect(received).toEqual(frames);expect(new Set(packets.filter(p=>p.id==='h'&&p.type==='data').map(p=>p.seq)).size).toBe(1);
+  } finally {a.stop();b.stop();}
+});

@@ -1,0 +1,3 @@
+import {expect,it} from 'vitest';
+import {sheetSignature} from './sheet-signature';
+it('ignores storage-only timestamps but retains actual sheet changes',()=>{const hero={updatedAt:1,notes:'notes',portrait:'portrait',injuries:{head:[false]}};expect(sheetSignature(hero)).toBe(sheetSignature({...hero,updatedAt:2}));expect(sheetSignature(hero)).not.toBe(sheetSignature({...hero,notes:'changed'}));expect(sheetSignature(hero)).not.toBe(sheetSignature({...hero,portrait:'changed'}));expect(sheetSignature(hero)).not.toBe(sheetSignature({...hero,injuries:{head:[true]}}));expect(sheetSignature(null)).not.toBe(sheetSignature(hero));});

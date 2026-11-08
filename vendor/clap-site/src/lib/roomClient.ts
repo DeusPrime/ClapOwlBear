@@ -1,3 +1,4 @@
+import {sheetSignature} from '@owlbear/runtime/sheet-signature';
 import {callRoomApi,sharedRoomClient,createRoomPeer} from '@owlbear/runtime/client';
 import type { RollVisual } from "./rollVisual";
 import { localizeText } from '@/i18n/localize';
@@ -538,7 +539,7 @@ export class RoomClient {
       if (this.state.session?.id !== session.id || this.state.session.gameGeneration !== message.roomGeneration || !this.state.members.some(member => member.id === sender && member.role === 'mj')) return;
       this.save({ ...this.state.session, characterId: character.id, receivedAssignment: message.assignmentId, roomDirectoryId: project.id });
       selectDirectory(project.id);
-      this.peers.forEach(peer => { peer.sheet = ''; });
+      const assignedCharacter=await getCharacter(character.id)||character;const assignedSignature=sheetSignature(roomCharacterSchema.parse({...assignedCharacter,portrait:assignedCharacter.portrait||undefined}));this.peers.forEach(peer => { peer.sheet = message.resources?.length ? '' : assignedSignature; });
       acknowledge();
       window.dispatchEvent(new Event('clap-room-character-assigned'));
       toast.success(localizeText('Le MJ t’a attribué une fiche de héros.'));
@@ -883,7 +884,7 @@ export class RoomClient {
       const parsed = character ? roomCharacterSchema.safeParse({ ...character, portrait: character.portrait || undefined }) : null;
       if (parsed && !parsed.success) { this.update({ error: "Cette fiche contient un champ ou un portrait trop volumineux pour le partage." }); return; }
       const message: RoomMessage = { kind: "sheet", character: parsed?.success ? parsed.data : null };
-      const json = JSON.stringify(message);
+      const json = sheetSignature(message.character);
       if (json !== peer.sheet) {
         if (peer.transport.send(message)) peer.sheet = json;
         else this.update({ error: "La fiche n’a pas pu être transmise. Réduis la taille de son portrait." });

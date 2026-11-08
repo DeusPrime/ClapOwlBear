@@ -31,13 +31,13 @@ export function createNativePeerBridge(wire: NativeWire) {
     readyState: RTCDataChannelState='connecting'; bufferedAmount=0; bufferedAmountLowThreshold=64000;
     onopen:any;onmessage:any;onclose:any;onbufferedamountlow:any;
     constructor(readonly peer:NativePeer){}
-    send(value:string){if(this.readyState!=='open')throw new Error('Channel closed');this.bufferedAmount+=value.length*2;this.peer.queue.push(value);void this.peer.flush();}
+    send(value:string){if(this.readyState!=='open')throw new Error('Channel closed');this.bufferedAmount+=value.length*2;this.peer.queue.push(value);this.peer.scheduleFlush();}
     close(){this.peer.close();}
   }
   class NativePeer {
     id=crypto.randomUUID(); remoteId='';remoteConnection='';key?:CryptoKey;
     keys=crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveKey']);
-    queue:string[]=[];sending=false;sent=0;received=0;pending?:{seq:number;resolve:()=>void;reject:(e:Error)=>void};timer?:ReturnType<typeof setTimeout>;
+    queue:string[]=[];sending=false;flushQueued=false;sent=0;received=0;pending?:{seq:number;resolve:()=>void;reject:(e:Error)=>void};timer?:ReturnType<typeof setTimeout>;
     chunks?:{seq:number;count:number;iv:string;parts:Map<number,string>;created:number};receiving=Promise.resolve();
     channel?:Channel;localDescription:any;remoteDescription:any;readyTimer?:ReturnType<typeof setInterval>;readyTries=0;
     signalingState='stable';connectionState='new';iceGatheringState='complete';
@@ -66,10 +66,12 @@ export function createNativePeerBridge(wire: NativeWire) {
     }
     open(){if(!this.channel||this.channel.readyState!=='connecting')return;this.channel.readyState='open';this.connectionState='connected';this.onconnectionstatechange?.();this.channel.onopen?.(new Event('open'));}
     send(packet:any){stats.sentTypes[packet.type]=(stats.sentTypes[packet.type]||0)+1;if(packet.type==='ready')stats.readySent++;return scheduledSend({...packet,target:this.remoteId,sender:this.id});}
+    scheduleFlush(){if(this.flushQueued)return;this.flushQueued=true;queueMicrotask(()=>{this.flushQueued=false;void this.flush();});}
     async flush(){
       if(this.sending||this.channel?.readyState!=='open')return;this.sending=true;let phase='prepare';
       try {while(this.queue.length&&this.channel?.readyState==='open'){
-        const frames:string[]=[];let size=0;while(this.queue.length&&size<32000&&frames.length<64){const frame=this.queue.shift()!;frames.push(frame);size+=frame.length;}
+        const frames:string[]=[];let size=0,bytes=0;const encoder=new TextEncoder();
+        while(this.queue.length&&frames.length<64){const frame=this.queue[0];const length=encoder.encode(frame).length;if(frames.length&&bytes+length>128000)break;this.queue.shift();frames.push(frame);size+=frame.length;bytes+=length;}
         const seq=++this.sent;const iv=crypto.getRandomValues(new Uint8Array(12));
         const aad=new TextEncoder().encode(this.id+':'+this.remoteId+':'+seq);
         phase='compress';const packed=await transform(new TextEncoder().encode(JSON.stringify(frames)));
