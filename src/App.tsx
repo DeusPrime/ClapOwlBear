@@ -112,7 +112,8 @@ function RoomView() {
       <main className="container py-10">
         <h1 className="font-display text-3xl">Connexion à la salle</h1>
         <p className="mt-4 text-sm">
-          {room.error ||
+          {room.exitNotice ||
+            room.error ||
             "Le MJ doit ouvrir CLAP! dans la salle Owlbear. La connexion des joueurs se fait automatiquement."}
         </p>
         <p className="mt-3 text-xs text-muted-foreground">

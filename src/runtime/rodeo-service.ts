@@ -63,6 +63,7 @@ export class OwlbearRoomService {
   >();
   private dispose?: () => void;
   private localInstance = "";
+  private receiving = Promise.resolve();
   constructor(
     readonly port: RodeoPort,
     code: string,
@@ -71,7 +72,9 @@ export class OwlbearRoomService {
   }
   async start() {
     this.dispose = this.port.onSignal((event) => {
-      void this.receive(event).catch(() => {});
+      this.receiving = this.receiving
+        .then(() => this.receive(event))
+        .catch(() => {});
     });
     await this.port.setPlayerMetadata({
       [PLAYER_KEY]: { active: false, instance: "" },
@@ -130,8 +133,10 @@ export class OwlbearRoomService {
       !session.token.startsWith(d.epoch + ":")
     )
       this.error("La salle a été fermée ou a expiré.");
-    if (d.blocked.includes(self.id))
+    if (d.blocked.includes(self.id)) {
+      this.paused = true;
       this.error("Tu as été expulsé de la salle par le MJ.");
+    }
     return { self, d, host: self.id === d.hostId };
   }
   api = async (
@@ -158,8 +163,10 @@ export class OwlbearRoomService {
       }
       if (!d || d.closed)
         this.error("Le MJ doit ouvrir sa salle pour la rejoindre.", 404);
-      if (d.blocked.includes(self.id))
+      if (d.blocked.includes(self.id)) {
+        this.paused = true;
         this.error("Tu as été expulsé de la salle par le MJ.");
+      }
       const active = (await this.players()).filter(
         (p) => (p.metadata[PLAYER_KEY] as Presence | undefined)?.active,
       );
