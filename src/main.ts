@@ -36,6 +36,7 @@ if (OBR.isAvailable)
       const { mount } = await import("./App");
       mount();
     })().catch((error) => {
+      console.error("CLAP startup:", error);
       app.textContent =
         error instanceof Error ? error.message : "Connexion impossible.";
     });

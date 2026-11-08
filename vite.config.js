@@ -5,13 +5,24 @@ const base = "/ClapOwlBear/";
 const publicUrl = "https://deusprime.github.io/ClapOwlBear/";
 export default defineConfig(({ command }) => ({
   base,
-  define: { __APP_VERSION__: JSON.stringify("0.2.1") },
+  define: { __APP_VERSION__: JSON.stringify("0.2.2") },
   resolve: {
     alias: { "@owlbear": resolve("src"), "@": resolve("vendor/clap-site/src") },
     dedupe: ["react", "react-dom"],
   },
   build: {
     rollupOptions: {
+      // Keep validation dependencies, bootstrap and engine in dependency order.
+      // Automatic shared chunks introduced a cycle that called uninitialized Zod factories.
+      output: {
+        manualChunks(id) {
+          const file = id.replaceAll("\\", "/");
+          if (file.includes("vite/preload-helper")) return "preload";
+          if (file.endsWith("/src/runtime/client.ts")) return "runtime";
+          if (file.includes("/node_modules/")) return "dependencies";
+          if (file.includes("/vendor/clap-site/")) return "site";
+        },
+      },
       input: {
         main: resolve("index.html"),
         background: resolve("background.html"),
@@ -26,7 +37,7 @@ export default defineConfig(({ command }) => ({
         const manifest = JSON.parse(
           readFileSync("public/manifest.json", "utf8").replace(/^\uFEFF/, ""),
         );
-        manifest.icon = new URL("icon.svg?v=0.2.1", publicUrl).href;
+        manifest.icon = new URL("icon.svg?v=0.2.2", publicUrl).href;
         manifest.background_url = new URL("background.html", publicUrl).href;
         manifest.action.icon = manifest.icon;
         manifest.action.popover = new URL("index.html", publicUrl).href;
