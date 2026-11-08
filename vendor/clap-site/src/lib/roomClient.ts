@@ -3,6 +3,7 @@ import { localizeText } from '@/i18n/localize';
 import { selectDirectory, loadDirectories } from "./directories";
 import { ensureRoomProject } from './roomProject';
 import { roomInventoryChanges, roomHeroEditFields, roomHeroEditSignature } from './roomInventoryChanges';
+import { owlbearRoomUrlSchema } from './roomProtocol';
 import { playerIdentityToken } from './playerIdentity';
 import { rememberRoomNickname } from "./roomNickname";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ const STORAGE = "clap-room-session-v1";
 type Peer = { pc: RTCPeerConnection; transport?: RoomTransport; connection: string; instance: string; started: number; sheet: string; assignment?: string; resources?: Map<string, string> };
 type Snapshot = {
   projectName?: string;
+  owlbearUrl?: string;
   projectId?: string;
   projects?: { id: string; name: string }[];
   roomResources?: BundledResource[];
@@ -80,6 +82,7 @@ export class RoomClient {
     const refs = patch.privateRefs || this.state.privateRefs;
     const active = new Set(refs.filter(ref => ref.type === 'hero').map(ref => ref.id));
     const heroes = this.archive?.heroes || [];
+    if (this.archive) patch = { owlbearUrl: this.archive.owlbearUrl, ...patch };
     patch = { roomResources: this.archive?.resources as BundledResource[] || [], ...patch };
     this.state = { ...this.state, projectId: this.archive?.projectId, projects: Object.entries(this.archive?.projectLinks || {}).map(([id, project]) => ({ id, name: project.name })), roomHeroes: (this.archive?.projectId ? heroes.filter(hero => active.has(hero.id)) : heroes) as Character[], ...patch };
     this.listeners.forEach(l => l());
@@ -124,6 +127,12 @@ export class RoomClient {
     await this.importProject(bytes, projectId);
   }
   private importingProject = false;
+  async setOwlbearRoomUrl(value: string) {
+    if (this.state.session?.role !== 'mj' || !this.archive) throw new Error('Action réservée au MJ.');
+    const owlbearUrl = value.trim() ? owlbearRoomUrlSchema.parse(value.trim()) : undefined;
+    this.archive = { ...this.archive, owlbearUrl };
+    this.update({ owlbearUrl }); this.publishGame(); await this.persistence;
+  }
   async addRoomResource(source: BundledResource) {
     const archive = this.archive, session = this.state.session;
     if (session?.role !== 'mj' || !archive) throw new Error('Action réservée au MJ.');
@@ -256,7 +265,7 @@ export class RoomClient {
       heroName: (this.state.sheets[value.id]?.nom || '').slice(0, 160), heroConcept: (this.state.sheets[value.id]?.concept || '').slice(0, 300) }));
     const owners = new Map(Object.entries({ ...this.archive?.sheets, ...this.state.sheets }).filter(([id]) => this.state.members.some(member => member.id === id && member.role === 'player')).map(([id, hero]) => [hero.id, id]));
     const roomHeroes = [...new Map([...this.state.roomHeroes, ...Object.values(this.archive?.sheets || {}), ...Object.values(this.state.sheets)].map(hero => [hero.id, hero])).values()].map(hero => ({ id: hero.id, name: (hero.nom || 'Héros sans nom').slice(0, 160), ownerId: owners.get(hero.id) }));
-    return { kind: 'game-state', ...gameView(this.game, member), heroes, roomHeroes };
+    return { kind: 'game-state', ...gameView(this.game, member), heroes, roomHeroes, ...(this.state.owlbearUrl ? { owlbearUrl: this.state.owlbearUrl } : {}) };
   }
   private publishGame() {
     const session = this.state.session;
@@ -361,7 +370,7 @@ export class RoomClient {
       if (archive && archive.hostId !== session.id) this.game = { ...this.game, messages: this.game.messages.map(message => ({ ...message,
         sender: message.sender === archive.hostId ? session.id : message.sender,
         privateTo: message.privateTo === archive.hostId ? session.id : message.privateTo })) };
-      this.update({ exitNotice: undefined, projectName: archive?.projectName, roomInfo: { title: archive?.title || options.title || '', locked: Boolean(options.password) }, privateRefs: archive?.privateRefs || [], savedSheets: archive?.sheets || {}, savedSheetResources: archive?.sheetResources || {}, messages: [], requests: [], sheets: {}, sheetResources: {} });
+      this.update({ exitNotice: undefined, owlbearUrl: archive?.owlbearUrl, projectName: archive?.projectName, roomInfo: { title: archive?.title || options.title || '', locked: Boolean(options.password) }, privateRefs: archive?.privateRefs || [], savedSheets: archive?.sheets || {}, savedSheetResources: archive?.sheetResources || {}, messages: [], requests: [], sheets: {}, sheetResources: {} });
       this.save({ ...session, characterId, ...(archive ? { localRoomId: archive.id } : {}) });
       if (archive) rememberRoomSettings(archive.id, options.password);
       this.publishGame();
@@ -454,7 +463,7 @@ export class RoomClient {
     catch (error) { if ((error as { status?: number }).status !== 401) throw error; }
     this.forget();
   }
-  private forget() { const code = this.state.session?.room; this.stop(); if (code) forgetOwnedRoom(code); sessionStorage.removeItem(STORAGE); this.update({ session: null, projectName: undefined, error: "" }); }
+  private forget() { const code = this.state.session?.room; this.stop(); if (code) forgetOwnedRoom(code); sessionStorage.removeItem(STORAGE); this.update({ session: null, owlbearUrl: undefined, projectName: undefined, error: "" }); }
   async assignCharacter(playerId: string, characterId: string) {
     const session = this.state.session;
     const member = this.state.members.find(member => member.id === playerId && member.role === 'player');
@@ -890,7 +899,7 @@ export class RoomClient {
       return;
     }
     if (message.kind === 'game-handoff' && session.role === 'player' && source.role === 'mj') {
-      const record: RoomArchive = { format: 'clapSalle', version: 1, id: crypto.randomUUID(), title: this.state.roomInfo?.title || 'Salle de jeu', hostId: session.id, hostName: session.name, updatedAt: Date.now(), game: message.game, privateRefs: [], heroes: [], resources: [], sheets: {}, sheetResources: {} };
+      const record: RoomArchive = { format: 'clapSalle', version: 1, id: crypto.randomUUID(), title: this.state.roomInfo?.title || 'Salle de jeu', owlbearUrl: this.state.owlbearUrl, hostId: session.id, hostName: session.name, updatedAt: Date.now(), game: message.game, privateRefs: [], heroes: [], resources: [], sheets: {}, sheetResources: {} };
       void saveLocalRoom(record).then(() => {
         if (this.state.session?.id !== session.id) return;
         this.handoff = record;
@@ -911,7 +920,7 @@ export class RoomClient {
       if (session.role === 'player' && source.role === 'mj') {
         this.update({ availableHeroes: (message.roomHeroes || []) as Snapshot["availableHeroes"] });
         if (message.heroes) this.publicHeroes = new Map(message.heroes.map(hero => [hero.id, { heroName: hero.heroName, heroConcept: hero.heroConcept }]));
-        this.update({ messages: message.messages, requests: message.requests.filter(request => !this.resolvedRequests.has(request.id)),
+        this.update({ owlbearUrl: message.owlbearUrl, messages: message.messages, requests: message.requests.filter(request => !this.resolvedRequests.has(request.id)),
           members: this.state.members.map(member => ({ ...member, ...this.publicHeroes.get(member.id) })) });
       }
       return;

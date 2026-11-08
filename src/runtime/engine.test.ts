@@ -35,6 +35,36 @@ async function engine(
   return client;
 }
 describe("Moteur CLAP! partagé — MJ et joueurs", () => {
+  it.each(["closed-tab", "logout-login", "new-browser"])("restores the player hero after %s and a new Owlbear connection", async scenario => {
+    vi.stubGlobal("RTCPeerConnection", MemoryPeer);
+    const world = new FakeRodeo(); world.add("host", "GM"); world.add("alice", "PLAYER");
+    const hs = new OwlbearRoomService(world.port("host"), "ABCD1234ABCD");
+    const ps = new OwlbearRoomService(world.port("alice"), "ABCD1234ABCD");
+    services.push(hs, ps); await hs.start(); await ps.start();
+    const host = await engine(hs, "host");
+    const player = await engine(ps, "alice", "ABCD1234ABCD");
+    await vi.waitFor(() => expect(host.snapshot().connected).toContain("alice"), { timeout: 12000 });
+    const { blankCharacter } = await import("@/lib/characters");
+    const hero = await host.addRoomHero({ ...blankCharacter(), nom: "Returning hero", notes: "Keep this progress" }, []);
+    await host.setOwlbearRoomUrl("https://www.owlbear.rodeo/room/room-id/adventure");
+    await host.assignCharacter("alice", hero.id);
+    await vi.waitFor(() => expect(player.snapshot().session?.characterId).toBe(hero.id));
+    await host.heroAction("alice", { type: "add-item", category: "autresAccessoires", item: { nom: "Returning key", proprietes: "Keep", degats: "", poids: "", protection: "" } });
+    await vi.waitFor(() => expect(host.snapshot().sheets.alice.autresAccessoires).toHaveLength(1));
+    player.stop(); ps.stop(); world.players = world.players.filter(p => p.id !== "alice");
+    await vi.waitFor(() => expect(host.snapshot().members.some(p => p.id === "alice")).toBe(false), { timeout: 12000 });
+    sessionStorage.clear();
+    if (scenario === "new-browser") await (await import("@/lib/characters")).deleteCharacter(hero.id);
+    const returning = world.add("alice", "PLAYER"); returning.connectionId = "new-connection-alice";
+    const nextService = new OwlbearRoomService(world.port("alice"), "ABCD1234ABCD"); services.push(nextService); await nextService.start();
+    const next = await engine(nextService, "alice", "ABCD1234ABCD");
+    await vi.waitFor(() => expect(next.snapshot().session?.characterId).toBe(hero.id), { timeout: 12000 });
+    await vi.waitFor(() => expect(host.snapshot().sheets.alice.autresAccessoires).toHaveLength(1));
+    expect(host.snapshot().sheets.alice.notes).toBe("Keep this progress");
+    await vi.waitFor(() => expect(next.snapshot().owlbearUrl).toBe("https://www.owlbear.rodeo/room/room-id/adventure"));
+    const recovered = await (await import("@/lib/characters")).getCharacter(hero.id);
+    expect(recovered?.autresAccessoires[0].nom).toBe("Returning key");
+  }, 25000);
 
   it("imports a full project into the room, restricts it to the MJ and restores its export", async () => {
     vi.stubGlobal("RTCPeerConnection", MemoryPeer);

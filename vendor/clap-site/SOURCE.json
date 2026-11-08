@@ -1,6 +1,6 @@
 {
   "source": "DeusPrime/clap-cinematic-quest",
-  "syncedAt": "2026-11-08T13:26:10.775Z",
+  "syncedAt": "2026-11-08T13:53:23.112Z",
   "adaptations": [
     "zod/v3 compatibility",
     "GitHub Pages asset paths",
@@ -399,7 +399,11 @@
     ],
     [
       "vendor/clap-site/src/components/RoomMJWorkspace.tsx",
-      "da01757337f2c6eecafdd3342f1e83edbad0170bbe663d26962a60a0f426bf00"
+      "1e5e2bcbb8672b33a69b8ca76c83bf1579248488707405fce46919336e50ab19"
+    ],
+    [
+      "vendor/clap-site/src/components/RoomOwlbearLink.tsx",
+      "6a099e08ed4cc8dfc47a6199085d9a181b6638e118f19ddf438a29640c99ebe4"
     ],
     [
       "vendor/clap-site/src/components/RoomPlayersBoard.tsx",
@@ -407,7 +411,7 @@
     ],
     [
       "vendor/clap-site/src/components/RoomPlayerWorkspace.tsx",
-      "959f5944e5ac1593e3003ca5163e6978071460f415b23b43948f673e6a876266"
+      "f9fd483738d4d59597114fead902e332e18019d547e7e9a0049c0d62d3c66c57"
     ],
     [
       "vendor/clap-site/src/components/RoomPrivateResources.tsx",
@@ -1075,11 +1079,11 @@
     ],
     [
       "vendor/clap-site/src/lib/roomArchive.ts",
-      "9b34ed45de925a1c4a51d65560ac15c8221855d2ad4aef5780ecdb90de766bbe"
+      "a96ebc7f378ada03e40252ef55692e2952569a0377c3b267d7a78900310f4728"
     ],
     [
       "vendor/clap-site/src/lib/roomClient.ts",
-      "451f4c0f868503b271aee026a404793a09767bf93a2248792087ac6eabb7c667"
+      "cc2f469ee19f5cb073de218dcf9f59e8e31e013c591f676ec1426e4d2fd212c1"
     ],
     [
       "vendor/clap-site/src/lib/roomInventoryChanges.ts",
@@ -1095,7 +1099,7 @@
     ],
     [
       "vendor/clap-site/src/lib/roomProtocol.ts",
-      "95691826fb23f4a3e7de8d8d320f099bfa4015ee965c304ef737ecdad97a35c6"
+      "45cf5d2e6439b67a4fd9027866b6b7489ff6920f77f77eb66b4cda2804ee9acf"
     ],
     [
       "vendor/clap-site/src/lib/roomResources.ts",

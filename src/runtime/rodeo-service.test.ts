@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { OwlbearRoomService, ROOM_KEY, PLAYER_KEY } from "./rodeo-service";
+import { OwlbearRoomService, ROOM_KEY, PLAYER_KEY, HOST_KEY } from "./rodeo-service";
 import { FakeRodeo } from "../test/fakes";
 const instances: OwlbearRoomService[] = [];
 afterEach(() => {
@@ -117,4 +117,23 @@ describe("Salle Owlbear et identités individuelles", () => {
         services.alice.api("/poll", { instance: "a", since: 0 }, alice),
       ).rejects.toMatchObject({ status: 401 });
     }));
+});
+
+it('keeps an existing player session retryable when the MJ presence is temporarily absent', async () => {
+  const { world, services } = await fixture();
+  await services.host.api('', {}, null);
+  const session = await services.alice.api('/join', {}, null);
+  const host = world.players.find(player => player.id === 'host')!;
+  world.players = world.players.filter(player => player.id !== 'host');
+  await expect(services.alice.api('/poll', { instance: 'returning', since: 0 }, session)).rejects.toMatchObject({ status: 409 });
+  world.players.push(host);
+  await expect(services.alice.api('/poll', { instance: 'returning', since: 0 }, session)).resolves.toMatchObject({ self: { role: 'player' } });
+});
+
+it('allows the returning GM to recreate a missing native descriptor from the local room save', async () => {
+  const { world, services } = await fixture();
+  const session = await services.host.api('', {}, null);
+  delete world.players.find(player => player.id === 'host')!.metadata[HOST_KEY];
+  await expect(services.host.api('/poll', { instance: 'returning-host', since: 0 }, session)).rejects.toMatchObject({ status: 401 });
+  await expect(services.host.api('', {}, null)).resolves.toMatchObject({ role: 'mj' });
 });

@@ -1,5 +1,6 @@
+import { rememberPlayerSession, rememberedPlayerSession } from "./runtime/player-session";
 import { watchPublicRolls } from "./runtime/roll-notifications";
-﻿import OBR from "@owlbear-rodeo/sdk";
+import OBR from "@owlbear-rodeo/sdk";
 import { configureRuntime, serveRoomClient } from "./runtime/client";
 import { OwlbearRoomService, roomCode, sdkPort } from "./runtime/rodeo-service";
 
@@ -24,6 +25,7 @@ async function start() {
     nextAttempt = 0;
   const remember = async () => {
     const s = roomClient.snapshot().session;
+    rememberPlayerSession(port.roomId, self.id, s);
     if (s?.role === "mj" && s.localRoomId)
       localStorage.setItem(archiveKey, s.localRoomId);
   };
@@ -33,16 +35,30 @@ async function start() {
   roomClient.subscribe(() => {
     void remember();
   });
+  // sessionStorage disappears when the Owlbear tab is closed. Restore only this
+  // room/account and game generation, never another participant or another game.
+  const descriptor = await service.descriptor();
+  const expectedRoom = descriptor?.site?.room || code;
+  const memberId = descriptor?.site ? localStorage.getItem('clap-owlbear-site-member:' + self.id) : self.id;
+  const savedPlayer = memberId ? rememberedPlayerSession(port.roomId, self.id, expectedRoom, memberId, descriptor?.site ? undefined : descriptor?.epoch) : undefined;
+  if (savedPlayer) {
+    const { getCharacter } = await import('@/lib/characters');
+    if (await getCharacter(savedPlayer.characterId!)) sessionStorage.setItem('clap-room-session-v1', JSON.stringify(savedPlayer));
+  }
   // Saved edits originate in the visible UI and are forwarded by the local background bus.
-  const session = JSON.parse(
-    sessionStorage.getItem("clap-room-session-v1") || "null",
-  );
+  let session: import('@/lib/roomProtocol').RoomSession | null = null;
+  try { session = JSON.parse(sessionStorage.getItem('clap-room-session-v1') || 'null'); }
+  catch { sessionStorage.removeItem('clap-room-session-v1'); }
   if (
     session?.room === ((await service.descriptor())?.site?.room || code) &&
     (session.id === self.id ||
       session.id ===
         localStorage.getItem(`clap-owlbear-site-member:${self.id}`))
   ) {
+    if (session.characterId && !await (await import('@/lib/characters')).getCharacter(session.characterId)) {
+      const clean = { ...session, characterId: undefined, receivedAssignment: undefined };
+      sessionStorage.setItem('clap-room-session-v1', JSON.stringify(clean));
+    }
     await roomClient.restore();
   }
   const connect = async () => {
@@ -81,6 +97,12 @@ async function start() {
         const descriptor = await service.descriptor();
         if (!descriptor || descriptor.closed) return;
         await roomClient.enter((await port.self()).name, code);
+      }
+      if (roomClient.snapshot().session?.role === 'mj' && !roomClient.snapshot().owlbearUrl && document.referrer) {
+        try {
+          const parent = new URL(document.referrer);
+          if (decodeURIComponent(parent.pathname.split('/')[2] || '') === port.roomId) await roomClient.setOwlbearRoomUrl(parent.href);
+        } catch { /* Owlbear may send only its origin as the referrer. The MJ can supply the complete room link in settings. */ }
       }
       await remember();
       joinError = "";

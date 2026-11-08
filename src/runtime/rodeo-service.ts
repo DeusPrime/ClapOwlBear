@@ -134,8 +134,11 @@ export class OwlbearRoomService {
   private async authenticate(session: RoomSession | null) {
     const self = await this.port.self();
     const d = await this.descriptor();
+    if (!d) {
+      if (self.role === 'GM' && session?.role === 'mj' && session.id === self.id) this.error('La salle doit etre reprise par le MJ.', 401);
+      this.error('Connexion au MJ en cours. Nouvelle tentative automatique.', 409);
+    }
     if (
-      !d ||
       d.closed ||
       !session ||
       session.room !== this.code ||

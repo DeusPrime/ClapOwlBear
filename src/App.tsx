@@ -38,6 +38,7 @@ import {
   siteInvitation,
 } from "./runtime/client";
 import SiteLinkPanel from "./SiteLinkPanel";
+import RoomUrlPanel from "./RoomUrlPanel";
 import Logo from "@/components/clap/Logo";
 import { Button } from "@/components/ui/button";
 import "@/index.css";
@@ -220,6 +221,7 @@ function Settings() {
     <main className="container space-y-6 py-6">
       <h1 className="font-display text-3xl">Votre salle Owlbear</h1>
       <SiteLinkPanel />
+      <RoomUrlPanel />
       {room.session?.role === "mj" || !room.session ? (
         <>
           <p className="text-sm">

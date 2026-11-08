@@ -1,4 +1,4 @@
-# CLAP! pour Owlbear Rodeo — 0.2.5
+# CLAP! pour Owlbear Rodeo — 0.2.6
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
@@ -82,3 +82,5 @@ Le workflow GitHub Actions compile, teste, vérifie les fichiers et publie GitHu
 Le MJ importe son projet .clapStudio directement dans la salle, depuis le panneau de preparation. Les heros et cartes alimentent automatiquement la reserve de la salle. Une sauvegarde .clapSalle preparee se reprend sans reimport.
 
 Les blessures, inventaires, cartes et PV sont propres a la salle. Les ajouts de cartes creent une copie independante du projet source. Les jets publics declenchent une notification native Owlbear depuis le moteur en arriere-plan, meme panneau ferme ; les jets caches restent prives. Les mises a jour du panneau transmettent seulement les champs modifies, et les animations utilisent Web Animations pour eviter une boucle JavaScript par de.
+
+Reconnexion : le lien entre le joueur et son heros est conserve par salle et compte Owlbear, meme apres fermeture de l?onglet. Avec le meme compte, le MJ restitue aussi la fiche sur un autre navigateur sans cache. Une absence temporaire du MJ laisse la session en attente au lieu de l?effacer. Le lien vers la salle Owlbear est facultatif : il est detecte depuis l?adresse parente quand elle est fournie, ou peut etre renseigne dans Import / export ; sans adresse, aucune reference au lien n?apparait dans la vue de salle.

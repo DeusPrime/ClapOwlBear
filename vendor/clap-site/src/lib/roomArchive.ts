@@ -3,7 +3,7 @@ import { z } from 'zod/v3';
 import { rasterImageSchema, imageEditingSchema } from './dataValidation';
 import type { ImageEditing } from './imageEditing';
 import { localGameSchema } from './localRoomGame';
-import { roomCharacterSchema, roomResourceSchema } from './roomProtocol';
+import { roomCharacterSchema, roomResourceSchema, owlbearRoomUrlSchema } from './roomProtocol';
 import { openListDatabase } from './listDatabase';
 import { activeDirectory } from './directories';
 import { upsertCharacter, type Character } from './characters';
@@ -16,6 +16,7 @@ export const roomArchiveSchema = z.object({
   updatedAt: z.number().finite().nonnegative(), hostId: z.string().max(100), hostName: z.string().max(40),
   posterImage: rasterImageSchema.optional(), posterEditing: imageEditingSchema.optional(),
   projectName: z.string().min(1).max(80).optional(),
+  owlbearUrl: owlbearRoomUrlSchema.optional(),
   projectId: z.string().min(1).max(100).optional(),
   projectLinks: z.record(z.string().min(1).max(100), z.object({ name: z.string().min(1).max(80), refs: z.array(privateRefSchema).max(500) })).refine(value => Object.keys(value).length <= 50).optional(),
   game: localGameSchema, privateRefs: z.array(privateRefSchema).max(500),

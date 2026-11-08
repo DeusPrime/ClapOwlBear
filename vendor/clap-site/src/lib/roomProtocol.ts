@@ -3,6 +3,13 @@ import { characterInputSchema, directoryIdSchema, resourceSchemas } from "./data
 import { richTextToHtml } from "./richText";
 import { chatEntrySchema, rollRequestSchema, gameCommandSchema, localGameSchema } from "./localRoomGame";
 
+export const owlbearRoomUrlSchema = z.string().max(2048).url().refine(value => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && ['owlbear.rodeo', 'www.owlbear.rodeo'].includes(url.hostname) && !url.port && !url.username && !url.password && /^\/room\/[^/]+\/[^/]+\/?$/.test(url.pathname);
+  } catch { return false; }
+}, 'Colle le lien complet de la salle Owlbear.');
+
 const text = z.string().max(100000);
 const score = z.number().finite().min(-10000).max(10000);
 const checks = z.array(z.boolean()).max(7);
@@ -47,7 +54,7 @@ export const roomMessageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal('hero-proposal-result'), id: z.string().uuid(), accepted: z.boolean() }),
   z.object({ kind: z.literal('game-command'), command: gameCommandSchema }),
   z.object({ kind: z.literal('game-result'), id: z.string().uuid(), error: z.string().max(250).optional() }),
-  z.object({ kind: z.literal('game-state'), roomHeroes: z.array(z.object({ id: z.string().min(1).max(100), name: z.string().max(160), ownerId: z.string().max(100).optional() })).max(116).optional(), messages: z.array(chatEntrySchema).max(3200), requests: z.array(rollRequestSchema).max(100), heroes: z.array(z.object({ id: z.string().max(100), heroName: z.string().max(160), heroConcept: z.string().max(300) })).max(16).optional() }),
+  z.object({ kind: z.literal('game-state'), owlbearUrl: owlbearRoomUrlSchema.optional(), roomHeroes: z.array(z.object({ id: z.string().min(1).max(100), name: z.string().max(160), ownerId: z.string().max(100).optional() })).max(116).optional(), messages: z.array(chatEntrySchema).max(3200), requests: z.array(rollRequestSchema).max(100), heroes: z.array(z.object({ id: z.string().max(100), heroName: z.string().max(160), heroConcept: z.string().max(300) })).max(16).optional() }),
   z.object({ kind: z.literal('game-handoff'), id: z.string().uuid(), game: localGameSchema }),
   z.object({ kind: z.literal('game-handoff-ready'), id: z.string().uuid() }),
   publicRollSchema,

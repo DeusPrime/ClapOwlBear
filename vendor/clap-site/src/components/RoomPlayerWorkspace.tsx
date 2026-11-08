@@ -8,6 +8,7 @@ import { activeDirectory, selectDirectory, DIRECTORY_SELECTED } from '@/lib/dire
 import CharacterEditor from '@/pages/CharacterEditor';
 import RoomChat from './RoomChat';
 import RoomManagement from './RoomManagement';
+import RoomOwlbearLink from './RoomOwlbearLink';
 import RoomHeroAssignments from './RoomHeroAssignments';
 import RoomPlayersBoard from './RoomPlayersBoard';
 import RoomRollRequests from './RoomRollRequests';
@@ -38,7 +39,7 @@ export default function RoomPlayerWorkspace({ characters, invitation }: { charac
   const session = room.session;
   const showOwnHero = () => { setHeroesOpen(false); setDiscussion(false); setHeroViewKey(value => value + 1); };
   const menu = (actions?: ReactNode) => <RoomManagement invitation={invitation} compact onShowHeroes={() => setHeroesOpen(true)} onChooseHero={() => setChoosing(true)} extraActions={actions} />;
-  const navigation = <DirectoryMenu value={directoryId} onChange={id => { selectDirectory(id); setDirectoryId(id); }} />;
+  const navigation = <div className="flex min-w-0 items-center gap-3"><DirectoryMenu value={directoryId} onChange={id => { selectDirectory(id); setDirectoryId(id); }} /><RoomOwlbearLink compact /></div>;
   const chat = <RoomChat messages={room.messages} memberId={session.id} members={room.members} draft={draft} onDraftChange={setDraft} recipient={recipient} onRecipientChange={setRecipient} />;
   const requests = <RoomRollRequests onPerform={id => { setRequestId(id); showOwnHero(); }} />;
   return <div className="room-player-workspace min-w-0">

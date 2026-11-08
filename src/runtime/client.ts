@@ -76,6 +76,7 @@ export const commands = new Set([
   "addRoomResource",
   "updateRoomHero",
   "setRoomTitle",
+  "setOwlbearRoomUrl",
   "linkSiteRoom",
   "unlinkSiteRoom",
   "createOwlbearInvite",
