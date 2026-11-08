@@ -2459,7 +2459,7 @@ const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, roomRequ
     const receiveRoomChange = (event: Event) => {
       const hero = (event as CustomEvent<{ character?: Character }>).detail?.character;
       if (!hero || hero.id !== id) return;
-      const patch = { armes: hero.armes, armures: hero.armures, autresAccessoires: hero.autresAccessoires, linkedResources: hero.linkedResources };
+      const patch = { armes: hero.armes, armures: hero.armures, autresAccessoires: hero.autresAccessoires, linkedResources: hero.linkedResources, injuries: hero.injuries, stress: hero.stress, griefs: hero.griefs, notes: hero.notes };
       setC(current => current?.id === hero.id ? { ...current, ...patch } : current);
       if (editSnapshotRef.current?.id === hero.id) editSnapshotRef.current = { ...editSnapshotRef.current, ...patch };
     };

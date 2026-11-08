@@ -1,3 +1,4 @@
+import { watchPublicRolls } from "./runtime/roll-notifications";
 ﻿import OBR from "@owlbear-rodeo/sdk";
 import { configureRuntime, serveRoomClient } from "./runtime/client";
 import { OwlbearRoomService, roomCode, sdkPort } from "./runtime/rodeo-service";
@@ -15,6 +16,7 @@ async function start() {
   const channel = `clap-owlbear:${port.roomId}:${self.id}:${self.connectionId}`;
   configureRuntime({ background: true, channel }, service.api);
   const { roomClient } = await import("@/lib/roomClient");
+  const stopRollNotifications = watchPublicRolls(roomClient, message => OBR.notification.show(message, "INFO"));
   const archiveKey = `clap-owlbear-archive:${port.roomId}:${self.id}`;
   let connecting = false,
     joinError = "",
@@ -110,6 +112,7 @@ async function start() {
   window.addEventListener(
     "pagehide",
     () => {
+      stopRollNotifications();
       roomClient.stop();
       service.stop();
     },

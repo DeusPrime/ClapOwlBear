@@ -78,3 +78,29 @@ describe("Connexion maintenue en arrière-plan", () => {
     expect(engine.stop).not.toHaveBeenCalled();
   });
 });
+
+it('keeps card image data and library refreshes out of chat-only updates', async () => {
+  vi.stubGlobal('BroadcastChannel', BroadcastChannel);
+  const channel = 'delta-' + crypto.randomUUID();
+  let state = { roomResources: [{ item: { id: 'card', image: 'large-image-payload' } }], messages: [] as string[] };
+  let update = () => {};
+  const engine = { snapshot: () => state, subscribe: (listener: () => void) => { update = listener; return () => {}; } };
+  const packets: any[] = [];
+  const monitor = new BroadcastChannel(channel);
+  monitor.onmessage = event => { if (event.data.type === 'snapshot') packets.push(event.data); };
+  stop = serveRoomClient(engine, channel);
+  configureRuntime({ background: false, channel });
+  const ui = sharedRoomClient(() => engine);
+  await vi.waitFor(() => expect(ui.snapshot().roomResources).toHaveLength(1));
+  const cards = ui.snapshot().roomResources;
+  await new Promise(resolve => setTimeout(resolve, 150));
+  const focus = vi.fn(); window.addEventListener('focus', focus);
+  packets.length = 0;
+  state = { ...state, messages: ['Public chat'] }; update();
+  await vi.waitFor(() => expect(ui.snapshot().messages).toEqual(['Public chat']));
+  expect(ui.snapshot().roomResources).toBe(cards);
+  expect(packets.at(-1).partial).toBe(true);
+  expect(packets.at(-1).snapshot).not.toHaveProperty('roomResources');
+  expect(focus).not.toHaveBeenCalled();
+  window.removeEventListener('focus', focus); monitor.close();
+});

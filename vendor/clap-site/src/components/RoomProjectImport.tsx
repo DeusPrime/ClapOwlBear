@@ -41,10 +41,10 @@ export default function RoomProjectImport() {
   }
   return <section className="space-y-3 border-2 border-ink bg-background/40 p-5 sm:p-6" aria-label={localizeText('Projet de la salle')}>
     <h2 className="font-display text-3xl">{localizeText(ready ? 'Projet de la salle' : 'Importe ton projet pour commencer')}</h2>
-    <p className="text-sm text-muted-foreground">{localizeText('Le MJ importe un fichier .clapStudio dans cette salle. Ses héros, cartes et ressources sont conservés dans un projet propre à la salle. Les joueurs n’ont rien à importer.')}</p>
+    <p className="text-sm text-muted-foreground">{localizeText('Le projet est copié au départ de la partie. Les héros, cartes, blessures et inventaires évoluent ensuite dans la salle. Le projet d’origine reste inchangé. Les joueurs n’ont rien à importer.')}</p>
     {room.projectName && <p className="font-bold">{room.projectName}</p>}
     <form className="flex flex-wrap items-end gap-3" onSubmit={event => { event.preventDefault(); void changeProject(); }}>
-      <label htmlFor="room-linked-project" className="min-w-0 flex-1 space-y-2 text-sm font-bold"><span>{localizeText('Projet lié à la salle')}</span><select id="room-linked-project" value={selected} onChange={event => setSelected(event.target.value)} disabled={busy} className="min-h-11 w-full border border-ink bg-paper px-3 font-normal"><option value="">{localizeText('Choisir un projet…')}</option>{[...projects].map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+      <label htmlFor="room-linked-project" className="min-w-0 flex-1 space-y-2 text-sm font-bold"><span>{localizeText('Projet lié à la salle')}</span><select aria-label={localizeText("Projet lié à la salle")} id="room-linked-project" value={selected} onChange={event => setSelected(event.target.value)} disabled={busy} className="min-h-11 w-full border border-ink bg-paper px-3 font-normal"><option value="">{localizeText('Choisir un projet…')}</option>{[...projects].map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
       <Button type="submit" disabled={busy || !selected || selected === room.projectId}>{localizeText('Utiliser ce projet')}</Button>
     </form>
     <p className="text-xs text-muted-foreground">{localizeText('Le projet sélectionné remplace la réserve du MJ. Les fiches déjà attribuées et la discussion sont conservées. Tu peux revenir à un projet précédent.')}</p>

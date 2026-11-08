@@ -1,6 +1,6 @@
 {
   "source": "DeusPrime/clap-cinematic-quest",
-  "syncedAt": "2026-11-08T12:51:32.700Z",
+  "syncedAt": "2026-11-08T13:26:10.775Z",
   "adaptations": [
     "zod/v3 compatibility",
     "GitHub Pages asset paths",
@@ -347,11 +347,11 @@
     ],
     [
       "vendor/clap-site/src/components/RollingDie.tsx",
-      "390d43eb5aaeec9eea59d534a8203ebe9c9ce5422c4407bd9fb4c8aa1958eda6"
+      "eb1f70ef14a413b67fec81d832d7f2b87be61bc2203cc1480c15460909b42d95"
     ],
     [
       "vendor/clap-site/src/components/RollOutcomeEffect.tsx",
-      "5e50103c51ccfe2fce3aa34269c8e6abb2994e665d5bb112d5804dec4a2b5651"
+      "a11c1393f1cde0bd682ba0160ed6cbcab0341c27b7e8886becf8b6f5741560e5"
     ],
     [
       "vendor/clap-site/src/components/RoomActorLinks.tsx",
@@ -367,7 +367,7 @@
     ],
     [
       "vendor/clap-site/src/components/RoomHeroActions.tsx",
-      "6adccc5f2137f5418b6572a9dcf7b60fba84cb3e30e7ddcec3d1b19f61292764"
+      "097127c36c14900446d89f707e190c9e62c38b9e957c59e29f725a74bc315cd3"
     ],
     [
       "vendor/clap-site/src/components/RoomHeroAssignments.tsx",
@@ -380,6 +380,10 @@
     [
       "vendor/clap-site/src/components/RoomHeroReserve.tsx",
       "ea4a34fc934eb2a189e4745aee2b6f56ce0c54c3273b76d64f346f8ad7f12564"
+    ],
+    [
+      "vendor/clap-site/src/components/RoomHeroStateEditor.tsx",
+      "e876d95bec37c3b8f19a1ce8a978bce7309a1c87a3cec8ca1a79f6731d19abc1"
     ],
     [
       "vendor/clap-site/src/components/RoomLibraryPicker.tsx",
@@ -395,11 +399,11 @@
     ],
     [
       "vendor/clap-site/src/components/RoomMJWorkspace.tsx",
-      "d9a6688d303f83704826c92baf892330d7dba6b73412dcdb270f9ba32829dcf3"
+      "da01757337f2c6eecafdd3342f1e83edbad0170bbe663d26962a60a0f426bf00"
     ],
     [
       "vendor/clap-site/src/components/RoomPlayersBoard.tsx",
-      "de6e514743e1828b5264206fbabca4fba4874d67e4780681a966887f0fb49da7"
+      "62b0e91041bd1f51c51e902200587b3207c2b516d21191af46c7bc6ef59696bd"
     ],
     [
       "vendor/clap-site/src/components/RoomPlayerWorkspace.tsx",
@@ -407,11 +411,11 @@
     ],
     [
       "vendor/clap-site/src/components/RoomPrivateResources.tsx",
-      "a3c56c7a605a80d752bf884fd06da372424aa731069c531c1daa09f911b0c60c"
+      "2581018fee6f5606beb7253ad6a8c1d6be02436dc7934a3fb98e2270c6cebedd"
     ],
     [
       "vendor/clap-site/src/components/RoomProjectImport.tsx",
-      "8fafc72df494fc8ad2bd0c1dce48c960ce6027f414a4872cf6f55b32ffe71627"
+      "3d90d2eb5048552358f234abae20cb3f767e93c8824be1b24b0d0ffcf2ba5b6d"
     ],
     [
       "vendor/clap-site/src/components/RoomResourceView.tsx",
@@ -419,7 +423,7 @@
     ],
     [
       "vendor/clap-site/src/components/RoomRewardNotification.tsx",
-      "0e75b816165e3cddcaffa93e1aff83a5192a133c1f68b687e0d6550b1fd899de"
+      "824115ce30f438f77ddabde5fab549861c1e1fb8c8daee6fc544fffae489ae30"
     ],
     [
       "vendor/clap-site/src/components/RoomRollRequests.tsx",
@@ -427,7 +431,7 @@
     ],
     [
       "vendor/clap-site/src/components/RoomSavedHeroCard.tsx",
-      "d99dbe9f0d7538c1fac3f28c6e78edd97acb4595f404a1a8d2903f46fe914352"
+      "5a62c1d62cee1a3f4a12dfd599b516191a882886c7c59cca32b6e80e91e27c92"
     ],
     [
       "vendor/clap-site/src/components/ScrollToTop.tsx",
@@ -739,7 +743,7 @@
     ],
     [
       "vendor/clap-site/src/index.css",
-      "92e8d31a3f2ca4991da181c0dcd5701441bf54c84d31f8ee7c09e17a0b1588de"
+      "d55c6ecdb436b98d52a05f5b48b40ba11b5ababf5d4f801f0f5fb24625ea8f6e"
     ],
     [
       "vendor/clap-site/src/lib/a4StyledImage.ts",
@@ -1075,7 +1079,11 @@
     ],
     [
       "vendor/clap-site/src/lib/roomClient.ts",
-      "68bb68919b2033f7729b62b0663020ac8959e3c44051e8d8b72a607720831650"
+      "451f4c0f868503b271aee026a404793a09767bf93a2248792087ac6eabb7c667"
+    ],
+    [
+      "vendor/clap-site/src/lib/roomInventoryChanges.ts",
+      "57a3ac8eb74c219d8c9fbba9c2e8439feafa263b0187814fe73781791f70d976"
     ],
     [
       "vendor/clap-site/src/lib/roomNickname.ts",
@@ -1087,7 +1095,7 @@
     ],
     [
       "vendor/clap-site/src/lib/roomProtocol.ts",
-      "f5e11bb6e979663e490deea076c10f71275aef183d1e5514fc644f84a009ed3a"
+      "95691826fb23f4a3e7de8d8d320f099bfa4015ee965c304ef737ecdad97a35c6"
     ],
     [
       "vendor/clap-site/src/lib/roomResources.ts",
@@ -1179,7 +1187,7 @@
     ],
     [
       "vendor/clap-site/src/pages/CharacterEditor.tsx",
-      "285553da91cdd1ed8975b14563160fd5a253146e0bd87df77bb6b02d600e2a6d"
+      "7a1849e6fff542e2879439be11abcc2e5c0513e8697cd9ac3e989bf7badc3723"
     ],
     [
       "vendor/clap-site/src/pages/CharactersList.tsx",

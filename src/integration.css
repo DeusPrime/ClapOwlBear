@@ -56,3 +56,7 @@
 [hidden] {
   display: none !important;
 }
+
+/* Avoid repainting the room behind translucent controls during dice animations. */
+.room-mj-workspace [role="tablist"], .room-sheet-tabs, .room-player-workspace nav { backdrop-filter: none; }
+[data-rolling-die], [data-roll-outcome] { backface-visibility: hidden; }

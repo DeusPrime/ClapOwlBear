@@ -2,6 +2,7 @@ import {callRoomApi,sharedRoomClient} from '@owlbear/runtime/client';
 import { localizeText } from '@/i18n/localize';
 import { selectDirectory, loadDirectories } from "./directories";
 import { ensureRoomProject } from './roomProject';
+import { roomInventoryChanges, roomHeroEditFields, roomHeroEditSignature } from './roomInventoryChanges';
 import { playerIdentityToken } from './playerIdentity';
 import { rememberRoomNickname } from "./roomNickname";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ type Snapshot = {
   projectName?: string;
   projectId?: string;
   projects?: { id: string; name: string }[];
+  roomResources?: BundledResource[];
   availableHeroes?: { id: string; name: string; ownerId?: string }[];
   roomHeroes: Character[];
   heroProposals: (Extract<RoomMessage, { kind?: 'hero-proposal' }> & { playerId: string })[];
@@ -78,6 +80,7 @@ export class RoomClient {
     const refs = patch.privateRefs || this.state.privateRefs;
     const active = new Set(refs.filter(ref => ref.type === 'hero').map(ref => ref.id));
     const heroes = this.archive?.heroes || [];
+    patch = { roomResources: this.archive?.resources as BundledResource[] || [], ...patch };
     this.state = { ...this.state, projectId: this.archive?.projectId, projects: Object.entries(this.archive?.projectLinks || {}).map(([id, project]) => ({ id, name: project.name })), roomHeroes: (this.archive?.projectId ? heroes.filter(hero => active.has(hero.id)) : heroes) as Character[], ...patch };
     this.listeners.forEach(l => l());
   }
@@ -95,6 +98,8 @@ export class RoomClient {
     void this.persistence.catch(() => this.update({ error: 'La sauvegarde locale a échoué. Exporte ta salle avant de fermer.' }));
   }
   setPrivateRefs(privateRefs: PrivateRoomRef[]) {
+    if (this.state.session?.role !== 'mj' || !this.archive) throw new Error('Action réservée au MJ.');
+    if (privateRefs.length > 500 || privateRefs.some(ref => ref.count !== undefined && (!Number.isSafeInteger(ref.count) || ref.count < 0))) throw new Error('Compteur ou liste de cartes invalide.');
     if (this.archive?.projectId && this.archive.projectLinks?.[this.archive.projectId]) this.archive = { ...this.archive, projectLinks: { ...this.archive.projectLinks, [this.archive.projectId]: { ...this.archive.projectLinks[this.archive.projectId], refs: privateRefs } } };
     this.update({ privateRefs }); this.persist();
   }
@@ -119,6 +124,39 @@ export class RoomClient {
     await this.importProject(bytes, projectId);
   }
   private importingProject = false;
+  async addRoomResource(source: BundledResource) {
+    const archive = this.archive, session = this.state.session;
+    if (session?.role !== 'mj' || !archive) throw new Error('Action réservée au MJ.');
+    if (archive.resources.length >= 500 || this.state.privateRefs.length >= 500) throw new Error('La salle contient déjà 500 cartes.');
+    const directory = ensureRoomProject(archive.id, archive.title);
+    const copy = transferableRoomResource(source);
+    const resource = { type: copy.type, item: { ...copy.item, id: crypto.randomUUID(), directoryId: directory.id, updatedAt: Date.now() } } as BundledResource;
+    await (await import('./resourceBundle')).upsertBundledResource(resource);
+    if (this.archive?.id !== archive.id || this.state.session?.id !== session.id) throw new Error('La salle a changé.');
+    this.archive = { ...this.archive, resources: [...this.archive.resources, transferableRoomResource(resource)] };
+    this.setPrivateRefs([...this.state.privateRefs, { type: resource.type, id: resource.item.id }]);
+    await this.persistence;
+    return resource;
+  }
+  async updateRoomHero(character: Character, expectedUpdatedAt: number, expectedState?: string) {
+    const archive = this.archive, session = this.state.session;
+    if (session?.role !== 'mj' || !archive) throw new Error('Action réservée au MJ.');
+    const owner = Object.entries(this.state.sheets).find(([, hero]) => hero.id === character.id)?.[0];
+    if (owner) {
+      const current = this.state.sheets[owner];
+      if (expectedState ? roomHeroEditSignature(current) !== expectedState : current.updatedAt !== expectedUpdatedAt) throw new Error('La fiche a changé. Rouvre-la avant de modifier son état.');
+      return this.heroAction(owner, { type: 'edit-sheet', character: roomCharacterSchema.parse({ ...character, portrait: character.portrait || undefined }), expectedUpdatedAt, expectedState: expectedState || roomHeroEditSignature(current) });
+    }
+    const stored = archive.heroes.find(hero => hero.id === character.id);
+    if (!stored) throw new Error('Héros absent de la salle.');
+    if (expectedState ? roomHeroEditSignature(stored as Character) !== expectedState : stored.updatedAt !== expectedUpdatedAt) throw new Error('La fiche a changé. Rouvre-la avant de modifier son état.');
+    const hero = roomCharacterSchema.parse({ ...stored, ...roomHeroEditFields(character), portrait: stored.portrait || undefined, updatedAt: Date.now() });
+    await upsertCharacter(hero as Character);
+    if (this.archive?.id !== archive.id || this.state.session?.id !== session.id || this.state.session.role !== 'mj') throw new Error('La salle a changé.');
+    this.archive = { ...this.archive!, heroes: this.archive!.heroes.map(item => item.id === hero.id ? hero : item) };
+    this.publishGame(); await this.persistence;
+    window.dispatchEvent(new Event('clap-room-character-assigned'));
+  }
   async importProject(bytes: ArrayBuffer, sourceId?: string) {
     const session = this.state.session, archive = this.archive;
     if (session?.role !== 'mj' || !archive) throw new Error('Import réservé au MJ.');
@@ -671,6 +709,7 @@ export class RoomClient {
       let hero = await getCharacter(message.characterId);
       if (!hero || this.state.session?.id !== session.id || this.state.session.characterId !== hero.id || !this.state.members.some(member => member.id === sender && member.role === 'mj')) throw new Error('Fiche ou MJ indisponible.');
       const action = message.action;
+      const previousHero = hero;
       let reward: { title: string; removed: boolean; item?: unknown; resource?: BundledResource };
       if (action.type === 'unlink-resource') {
         if (!hero.linkedResources.some(link => link.type === action.resourceType && link.id === action.id)) throw new Error('Liaison déjà retirée.');
@@ -680,6 +719,10 @@ export class RoomClient {
         if (!hero || !hero.linkedResources.some(link => link.type === action.resourceType && link.id === action.id)) throw new Error('La fiche ou la liaison a changé.');
         hero.linkedResources = hero.linkedResources.filter(link => link.type !== action.resourceType || link.id !== action.id);
         reward = { title: resource?.item.titre || 'Carte', removed: true, resource };
+      } else if (action.type === 'edit-sheet') {
+        if (action.expectedState ? roomHeroEditSignature(hero) !== action.expectedState : hero.updatedAt !== action.expectedUpdatedAt) throw new Error('La fiche a changé. Rouvre-la avant de modifier son état.');
+        hero = { ...hero, ...roomHeroEditFields(action.character as Character) };
+        reward = { title: 'Fiche mise à jour par le MJ', removed: false };
       } else if (action.type === 'add-item') {
         if (hero[action.category].length >= 100) throw new Error('Inventaire plein.');
         const item = action.category === 'armes' ? { nom: action.item.nom, degats: action.item.degats, proprietes: action.item.proprietes } : action.category === 'armures' ? { nom: action.item.nom, poids: action.item.poids, protection: action.item.protection, proprietes: action.item.proprietes } : { nom: action.item.nom, proprietes: action.item.proprietes };
@@ -695,7 +738,9 @@ export class RoomClient {
       await upsertCharacter(hero);
       this.save({ ...this.state.session!, receivedResourceOps: [...(this.state.session!.receivedResourceOps || []), message.operationId].slice(-200) });
       window.dispatchEvent(new CustomEvent('clap-room-character-assigned', { detail: { character: hero } }));
-      window.dispatchEvent(new CustomEvent('clap-room-reward', { detail: reward }));
+      if (action.type === 'edit-sheet') {
+        for (const change of roomInventoryChanges(previousHero, hero)) window.dispatchEvent(new CustomEvent('clap-room-reward', { detail: change }));
+      } else window.dispatchEvent(new CustomEvent('clap-room-reward', { detail: reward }));
       acknowledge();
       this.peers.forEach(peer => { peer.sheet = ''; void this.sendSheet(peer); });
     } catch (cause) { acknowledge(cause instanceof Error ? cause.message.slice(0, 250) : 'Action impossible.'); }

@@ -2067,7 +2067,7 @@
   0% { opacity: 1; transform: scale(1); filter: none; }
   25% { transform: translateX(-5px) rotate(-3deg); }
   40% { transform: translateX(5px) rotate(3deg); }
-  100% { opacity: .15; transform: scale(.7) rotate(8deg); filter: grayscale(1) blur(3px); }
+  100% { opacity: .15; transform: translate3d(0, 10px, 0) scale(.7) rotate(8deg); }
 }
 .room-reward-gain { animation: room-reward-gain .6s ease-out both; }
 .room-character-editor { min-height: 0; padding-bottom: 0; }

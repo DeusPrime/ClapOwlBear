@@ -16,6 +16,7 @@ import RoomResourceView from "./RoomResourceView";
 import RoomHeroAssignments from "./RoomHeroAssignments";
 import RoomRollRequests from "./RoomRollRequests";
 import RoomHeroActions from "./RoomHeroActions";
+import RoomHeroStateEditor from './RoomHeroStateEditor';
 import RollDialog, { type RollSelection } from "./RollDialog";
 const tabs = [["identity", "Identité", UserRound], ["attributes", "Attributs", Sparkles], ["traits", "Traits et équipement", BookOpen], ["state", "Constantes", HeartPulse], ["notes", "Notes", NotebookPen], ["back", "Portrait", Image], ["resources", "Cartes", Archive]] as const;
 export function PlayerSheet({ member, hero, onClose, initialTab = "identity" }: { member: RoomMember; hero: Character; onClose: () => void; initialTab?: (typeof tabs)[number][0] }) {
@@ -54,6 +55,7 @@ export function PlayerSheet({ member, hero, onClose, initialTab = "identity" }: 
         <DialogTitle className="break-words pr-10 font-display text-2xl sm:text-3xl">{hero.nom || "Héros sans nom"}</DialogTitle><DialogDescription className="mt-1">{localizeText("Fiche de ")}{localizeNode(member.name)}</DialogDescription>
         <div className="mt-2 flex items-center gap-3"><Button size="sm" variant="outline" onClick={() => setTab("attributes")}><Dices size={15} className="mr-2" />{localizeText("Préparer un jet")}</Button>{localizeNode(own && <Link to={`/characters/${hero.id}`} className="text-sm underline">{localizeText("Modifier ma fiche")}</Link>)}</div>
       </header>
+      {isMJ && <div className="flex flex-wrap gap-2 px-4 py-2"><RoomHeroStateEditor hero={hero} /><RoomHeroActions enabled member={member} hero={hero} onRoll={() => setRolling(true)} toolbar><span /></RoomHeroActions></div>}
       <div className="room-sheet-content">
       {tab !== 'resources' && <div ref={cardStage} className="room-sheet-card-stage"><CharacterCards c={hero} activeCardTab={tab} onToggleSelect={toggle} selectedKeys={new Set(selection.map(item => `${item.facet}::${item.name}`))} canSelectMore={selection.length < 2} /></div>}
       {tab === 'resources' && <section className="space-y-3 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-display text-2xl">{localizeText("Cartes liées")}</h3>{localizeNode(isMJ && <RoomLibraryPicker label={localizeText("Ajouter une carte liée")} onSelect={async resource => { if (resource.type === "hero") return; await roomClient.linkResource(member.id, resource); toast.success(localizeText("Carte ajoutée à la fiche du joueur.")); }} />)}</div>

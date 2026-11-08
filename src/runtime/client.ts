@@ -40,8 +40,9 @@ export function callRoomApi<T>(
   return api(path, body, session);
 }
 let foregroundBus: BroadcastChannel | undefined;
+let readyView: (() => void) | undefined;
 export function notifyViewReady() {
-  foregroundBus?.postMessage({ type: "view-ready" });
+  readyView?.();
 }
 const markEvent = (
   name: string,
@@ -72,6 +73,8 @@ const empty = {
 export const commands = new Set([
   "importProject",
   "useProject",
+  "addRoomResource",
+  "updateRoomHero",
   "setRoomTitle",
   "linkSiteRoom",
   "unlinkSiteRoom",
@@ -129,12 +132,31 @@ export function sharedRoomClient<T extends object>(factory: () => T): T {
       pending.set(id, { resolve, reject, timer });
       bus.postMessage({ type: "command", id, method, args });
     });
+  let viewReady = false;
+  const heldRewards = new Map<string, any>();
+  const seenEvents = new Set<string>();
+  const deliver = (data: any) => {
+    if (data.id) {
+      bus.postMessage({ type: 'ack-event', id: data.id });
+      if (seenEvents.has(data.id)) return;
+      seenEvents.add(data.id);
+      if (seenEvents.size > 500) seenEvents.delete(seenEvents.values().next().value!);
+    }
+    window.dispatchEvent(markEvent(data.name, data.detail, 'background'));
+  };
+  readyView = () => {
+    viewReady = true;
+    for (const data of heldRewards.values()) deliver(data);
+    heldRewards.clear();
+    bus.postMessage({ type: 'view-ready' });
+  };
   let refresh: ReturnType<typeof setTimeout> | undefined;
   bus.onmessage = ({ data }) => {
     if (data?.type === "snapshot") {
-      snapshot = data.snapshot;
+      const previous = snapshot;
+      snapshot = data.partial ? { ...snapshot, ...data.snapshot } : data.snapshot;
       listeners.forEach((fn) => fn());
-      if (!refresh)
+      if (!refresh && ["roomHeroes", "sheetResources", "sheets", "savedSheets"].some(key => previous[key] !== snapshot[key]))
         refresh = setTimeout(() => {
           refresh = undefined;
           window.dispatchEvent(new Event("clap-room-character-assigned"));
@@ -145,8 +167,8 @@ export function sharedRoomClient<T extends object>(factory: () => T): T {
       data?.type === "event" &&
       ["clap-room-reward", "clap-room-character-assigned"].includes(data.name)
     ) {
-      window.dispatchEvent(markEvent(data.name, data.detail, "background"));
-      if (data.id) bus.postMessage({ type: "ack-event", id: data.id });
+      if (data.name === "clap-room-reward" && !viewReady && data.id) heldRewards.set(data.id, data);
+      else deliver(data);
     }
     if (data?.type === "result") {
       const job = pending.get(data.id);
@@ -174,6 +196,7 @@ export function sharedRoomClient<T extends object>(factory: () => T): T {
     "pagehide",
     () => {
       clearInterval(hello);
+      if (refresh) clearTimeout(refresh);
       bus.close();
     },
     { once: true },
@@ -229,17 +252,21 @@ export function serveRoomClient(
   };
   window.addEventListener("clap-room-reward", forward);
   window.addEventListener("clap-room-character-assigned", forward);
-  const publish = () =>
-    bus.postMessage({
-      type: "snapshot",
-      snapshot: { ...client.snapshot(), ...integrationState?.() },
-    });
+  let lastSnapshot: Record<string, any> | undefined;
+  const equal = (a: any, b: any, depth = 2): boolean => a === b || Boolean(depth && a && b && typeof a === 'object' && typeof b === 'object' && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(key => Object.prototype.hasOwnProperty.call(b, key) && equal(a[key], b[key], depth - 1)));
+  const publish = (force: unknown = false) => {
+    const next = { ...client.snapshot(), ...integrationState?.() };
+    const partial = Boolean(lastSnapshot) && force !== true;
+    const changed = partial ? Object.fromEntries(Object.entries(next).filter(([key, value]) => !equal(value, lastSnapshot![key]))) : next;
+    lastSnapshot = next;
+    if (Object.keys(changed).length) bus.postMessage({ type: 'snapshot', partial, snapshot: changed });
+  };
   const unsubscribe = client.subscribe(publish);
   window.addEventListener("clap-integration-state", publish);
   bus.onmessage = ({ data }) => {
     void (async () => {
       if (data?.type === "hello") {
-        publish();
+        publish(true);
         return;
       }
       if (data?.type === "view-ready") {

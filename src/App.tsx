@@ -27,7 +27,6 @@ import { activeDirectory } from "@/lib/directories";
 import RoomMJWorkspace from "@/components/RoomMJWorkspace";
 import RoomPlayerWorkspace from "@/components/RoomPlayerWorkspace";
 import RoomManagement from "@/components/RoomManagement";
-import RoomHeroReserve from "@/components/RoomHeroReserve";
 import LocalRoomLibrary from "@/components/LocalRoomLibrary";
 import RoomRewardNotification from "@/components/RoomRewardNotification";
 import GlobalExportLoader from "@/components/GlobalExportLoader";
@@ -187,7 +186,6 @@ function RoomView() {
       )}
       {room.session.role === "mj" ? (
         <div className="px-4">
-          <RoomHeroReserve characters={heroes} />
           <div className="mt-5">
             <RoomMJWorkspace characters={heroes} />
           </div>

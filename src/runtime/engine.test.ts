@@ -94,6 +94,23 @@ describe("Moteur CLAP! partagé — MJ et joueurs", () => {
     expect(host.snapshot().projectName).toBe("Library project");
     expect(host.snapshot().roomHeroes[0].nom).toBe("Library hero");
     expect(host.snapshot().roomHeroes[0].id).not.toBe(original.id);
+    const live = host.snapshot().roomHeroes[0];
+    await host.updateRoomHero({ ...live, injuries: { ...live.injuries, Centrale: [true, false, false, false, false, false, false] } }, live.updatedAt);
+    const { getCharacter } = await import("@/lib/characters");
+    expect((await getCharacter(original.id))!.injuries.Centrale[0]).toBe(false);
+    expect(host.snapshot().roomHeroes[0].injuries.Centrale[0]).toBe(true);
+    const { blankKeyRole, upsertKeyRole, loadKeyRoles } = await import("@/lib/keyRoles");
+    const originalCard = { ...blankKeyRole(), directoryId: library.id, titre: "Original actor", pv: "5" };
+    await upsertKeyRole(originalCard);
+    const roomCard = await host.addRoomResource({ type: "key-role", item: originalCard });
+    expect(roomCard.item.id).not.toBe(originalCard.id);
+    host.setPrivateRefs(host.snapshot().privateRefs.map(ref => ref.id === roomCard.item.id ? { ...ref, count: 0 } : ref));
+    expect((await loadKeyRoles()).find(card => card.id === originalCard.id)!.pv).toBe("5");
+    const isolated = JSON.parse(await (await JSZip.loadAsync(await readBlob((await host.exportArchive()).blob))).file("salle.json")!.async("string"));
+    expect(isolated.privateRefs.find((ref: any) => ref.id === roomCard.item.id).count).toBe(0);
+    await host.removeRoomHero(live.id);
+    expect(await getCharacter(original.id)).toBeDefined();
+
     await host.useProject(firstProject);
     expect(host.snapshot().roomHeroes[0].id).toBe(firstHero);
   });
@@ -156,6 +173,10 @@ describe("Moteur CLAP! partagé — MJ et joueurs", () => {
         "Clé",
       ),
     );
+    const currentSheet = host.snapshot().sheets.alice;
+    await host.updateRoomHero({ ...currentSheet, stress: [true, false, false, false, false, false, false] }, currentSheet.updatedAt);
+    await vi.waitFor(() => expect(host.snapshot().sheets.alice.stress[0]).toBe(true));
+    expect(source.stress[0]).toBe(false);
     expect(bob.snapshot().session!.characterId).toBeUndefined();
     expect(JSON.stringify(bob.snapshot().sheets)).not.toContain(
       "Notes privées du héros",

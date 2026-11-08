@@ -21,9 +21,11 @@ globalThis.BroadcastChannel = class {
   postMessage(data) { for (const peer of this.constructor.channels) if (peer !== this && peer.name === this.name) queueMicrotask(() => peer.onmessage?.({ data: structuredClone(data) })); }
   close() { this.constructor.channels.delete(this); }
 };
+const notifications = [];
 let metadata = {}, roomMetadata = {};
 const receive = (id, data) => window.dispatchEvent(new window.MessageEvent('message', { origin, data: { id, data } }));
 window.postMessage = message => {
+  if (message.id === "OBR_NOTIFICATION_SHOW") notifications.push(message.data.message);
   if (!message.nonce) return;
   const values = { OBR_PLAYER_GET_ID: { id: 'host' }, OBR_PLAYER_GET_NAME: { name: 'MJ' }, OBR_PLAYER_GET_ROLE: { role: 'GM' }, OBR_PLAYER_GET_CONNECTION_ID: { connectionId: 'connection-host' }, OBR_PLAYER_GET_METADATA: { metadata }, OBR_PLAYER_GET_COLOR: { color: '#123456' }, OBR_PLAYER_GET_SYNC_VIEW: { syncView: false }, OBR_PARTY_GET_PLAYERS: { players: [] }, OBR_ROOM_GET_METADATA: { metadata: roomMetadata } };
   if (message.id === 'OBR_PLAYER_SET_METADATA') metadata = { ...metadata, ...message.data.update };
@@ -40,7 +42,18 @@ const originalError = console.error;
 console.error = (...args) => { errors.push(args.join(' ')); originalError(...args); };
 let snapshot;
 const channel = new BroadcastChannel('clap-owlbear:production-test-room:host:connection-host');
-channel.onmessage = event => { if (event.data.type === 'snapshot') snapshot = event.data.snapshot; };
+const pending = new Map();
+channel.onmessage = event => {
+  const data = event.data;
+  if (data.type === 'snapshot') snapshot = data.partial ? { ...snapshot, ...data.snapshot } : data.snapshot;
+  if (data.type === 'result') { const resolve = pending.get(data.id); if (resolve) { pending.delete(data.id); resolve(data); } }
+};
+const command = (method, args) => new Promise((resolve, reject) => {
+  const id = crypto.randomUUID();
+  const timer = setTimeout(() => reject(new Error('Background command timed out')), 3000);
+  pending.set(id, result => { clearTimeout(timer); result.error ? reject(new Error(result.error)) : resolve(result.value); });
+  channel.postMessage({ type: 'command', id, method, args });
+});
 try {
   const html = readFileSync(background ? 'dist/background.html' : 'dist/index.html', 'utf8');
   const entry = html.match(/src="\/ClapOwlBear\/(assets\/[^\"]+\.js)"/)[1];
@@ -55,6 +68,16 @@ try {
   assert.deepEqual(errors, [], 'Compiled startup must not throw');
   if (background) assert.equal(snapshot?.session?.role, 'mj', 'Compiled background must open a real MJ session');
   else assert.ok(document.querySelector('nav[aria-label="Navigation MJ"]'), 'Compiled foreground must mount the MJ interface');
+  if (background) {
+    await command('broadcastRoll', ['Public roll', 'D6: 4', { public: true }]);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    assert.equal(notifications.length, 1, 'Public rolls must reach the native Owlbear notification API');
+    assert.ok(notifications[0].includes('Public roll'));
+    await command('setRollVisibility', [true]);
+    await command('broadcastRoll', ['Secret roll', 'D6: 2', {}]);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    assert.equal(notifications.length, 1, 'Hidden rolls must not trigger native notifications');
+  }
   console.log('Production startup OK: ' + (background ? 'background engine and MJ session' : 'foreground interface'));
   process.exit(0);
 } catch (error) { console.error(error); process.exit(1); }

@@ -8,6 +8,7 @@ import RoomChat from './RoomChat';
 import RoomPlayersBoard from './RoomPlayersBoard';
 import RoomPrivateResources from './RoomPrivateResources';
 import RoomProjectImport from './RoomProjectImport';
+import RoomHeroReserve from './RoomHeroReserve';
 import RoomHeroProposalDialog from './RoomHeroProposalDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
@@ -51,6 +52,7 @@ export default function RoomMJWorkspace({ characters }: { characters: Character[
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
       <TabsContent value="room" forceMount hidden={mobile && pane !== 'room'} className="mt-0 min-w-0 space-y-6">
         <RoomProjectImport />
+        <RoomHeroReserve characters={characters} />
         <div data-tour="room-players"><RoomPlayersBoard characters={characters} /></div>
         {Boolean(room.projectName || room.privateRefs.length || room.roomHeroes.length || Object.keys(room.savedSheets || {}).length) && <div data-tour="room-private-cards"><RoomPrivateResources characters={characters} /></div>}
       </TabsContent>

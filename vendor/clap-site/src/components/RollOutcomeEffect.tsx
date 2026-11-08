@@ -16,13 +16,12 @@ export default function RollOutcomeEffect({ outcome, active, children }: { outco
     target.style.opacity = "1";
     light.style.opacity = "0";
     if (!active || outcome === "neutral") return;
-    if (typeof requestAnimationFrame !== "function") return;
+    if (typeof target.animate !== 'function' || typeof light.animate !== 'function') return;
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const motion = reduced ? .2 : 1;
-    const start = performance.now();
-    let frame: number;
-    const tick = (time: number) => {
-      const progress = Math.min(1, Math.max(0, (time - start) / 650));
+    const frames: Keyframe[] = [], lights: Keyframe[] = [];
+    for (let step = 0; step <= 24; step++) {
+      const progress = step / 24;
       const fade = 1 - progress;
       const pulse = Math.sin(progress * Math.PI);
       let transform = "none";
@@ -32,15 +31,13 @@ export default function RollOutcomeEffect({ outcome, active, children }: { outco
       if (outcome === "complication") transform = `rotate(${Math.sin(progress * Math.PI * 6) * 4 * fade * motion}deg) scale(${1 + pulse * .04 * motion})`;
       if (outcome === "discarded") {
         transform = `translateY(${pulse * 9 * motion}px) rotate(${-pulse * 12 * motion}deg) scale(${1 - pulse * .15 * motion})`;
-        target.style.opacity = String(1 - .7 * (1 - fade * fade));
       }
-      target.style.transform = progress === 1 ? "none" : transform;
-      light.style.opacity = progress === 1 || outcome === "discarded" || outcome === "failure" || outcome === "complication" ? "0" : String(pulse * (outcome === "prowess" ? .8 : .45));
-      light.style.transform = `scale(${.85 + progress * .3})`;
-      if (progress < 1) frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+      frames.push({ transform: progress === 1 ? 'none' : transform, opacity: outcome === 'discarded' ? String(1 - .7 * (1 - fade * fade)) : '1' });
+      lights.push({ opacity: progress === 1 || outcome === 'discarded' || outcome === 'failure' || outcome === 'complication' ? '0' : String(pulse * (outcome === 'prowess' ? .8 : .45)), transform: `scale(${.85 + progress * .3})` });
+    }
+    const animation = target.animate(frames, { duration: reduced ? 100 : 650, fill: 'forwards' });
+    const lighting = light.animate(lights, { duration: reduced ? 100 : 650, fill: 'forwards' });
+    return () => { animation.cancel(); lighting.cancel(); };
   }, [active, outcome]);
   return <div ref={element} data-roll-outcome={active ? outcome : "rolling"} className="relative min-w-0 max-w-full">
     <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl"><span ref={halo} className="absolute inset-0 rounded-xl opacity-0" style={{ border: `2px solid hsl(${colors[outcome]} / .7)`, boxShadow: `0 0 ${outcome === "prowess" ? "24" : "12"}px hsl(${colors[outcome]} / .5)`, background: `radial-gradient(ellipse, hsl(${colors[outcome]} / .18), transparent 75%)` }} /></span>

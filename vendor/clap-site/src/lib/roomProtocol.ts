@@ -52,6 +52,7 @@ export const roomMessageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal('game-handoff-ready'), id: z.string().uuid() }),
   publicRollSchema,
   z.object({ kind: z.literal('hero-action'), operationId: z.string().uuid(), characterId: z.string().max(100), action: z.discriminatedUnion('type', [
+    z.object({ type: z.literal('edit-sheet'), character: roomCharacterSchema, expectedUpdatedAt: z.number().finite(), expectedState: z.string().max(1000000).optional() }),
     z.object({ type: z.literal('add-item'), category: z.enum(['armes', 'armures', 'autresAccessoires']), item: z.object({ nom: z.string().min(1).max(300), proprietes: z.string().max(2000), degats: z.string().max(100), poids: z.string().max(100), protection: z.string().max(100) }) }),
     z.object({ type: z.literal('remove-item'), category: z.enum(['armes', 'armures', 'autresAccessoires']), index: z.number().int().min(0).max(99), expected: z.string().max(10000) }),
     z.object({ type: z.literal('unlink-resource'), resourceType: z.enum(['key-role', 'figurant', 'profile', 'power', 'vehicle']), id: z.string().max(100) }),

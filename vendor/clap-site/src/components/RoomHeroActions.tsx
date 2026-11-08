@@ -9,7 +9,7 @@ import type { Character } from "@/lib/characters";
 import type { RoomMember } from "@/lib/roomProtocol";
 import { useRoom } from "@/hooks/use-room";
 
-export default function RoomHeroActions({ member, hero, onRoll, children, enabled }: { member: RoomMember; hero?: Character; onRoll: () => void; children: ReactNode; enabled: boolean }) {
+export default function RoomHeroActions({ member, hero, onRoll, children, enabled, toolbar = false }: { member: RoomMember; hero?: Character; onRoll: () => void; children: ReactNode; enabled: boolean; toolbar?: boolean }) {
   const [action, setAction] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -20,6 +20,7 @@ export default function RoomHeroActions({ member, hero, onRoll, children, enable
   const labels = { link: "Lier une carte", add: "Ajouter un objet", remove: "Supprimer un objet", unlink: "Supprimer une liaison", whisper: "Murmurer" };
   if (!enabled) return <>{children}</>;
   return <>
+    {toolbar && <div className="flex flex-wrap gap-2">{Object.entries(labels).filter(([key]) => key !== 'whisper').map(([key, label]) => <Button key={key} size="sm" variant="outline" disabled={!hero || !member.online} onClick={() => { setAction(key); setError(''); }}>{label}</Button>)}</div>}
     <ContextMenu><ContextMenuTrigger asChild>{children}</ContextMenuTrigger><ContextMenuContent>
       {Object.entries(labels).filter(([key]) => key !== "whisper").map(([key, label]) => <ContextMenuItem key={key} disabled={!hero || !member.online} onSelect={() => { setAction(key); setError(""); }}>{localizeNode(label)}</ContextMenuItem>)}
       <ContextMenuItem disabled={!hero} onSelect={onRoll}>{localizeText("Déclencher un jet")}</ContextMenuItem>
