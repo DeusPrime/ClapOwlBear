@@ -101,7 +101,7 @@ try{
  const zip=await new JSZip().file('studio.json',JSON.stringify({format:'clap-studio',version:1,project:{id:'project-source',name:'Guest recovery QA'},heroes:[hero],resources:[],tools:[]})).generateAsync({type:'uint8array'});
  await call(host,'host','importProject',[Array.from(zip),undefined,true]);
  const heroId=(await call(host,'host','snapshot')).roomHeroes[0].id;await call(host,'host','assignCharacter',['guest-old',heroId]);
- await until(async()=> (await call(guest,'guest-old','snapshot')).session.characterId===heroId,'first hero assignment');
+ try {await until(async()=> (await call(guest,'guest-old','snapshot')).session.characterId===heroId,'first hero assignment',90000);} catch(error) {console.log('HOST',JSON.stringify((await call(host,'host','snapshot')).connectionDiagnostics));console.log('GUEST',JSON.stringify((await call(guest,'guest-old','snapshot')).connectionDiagnostics));throw error;}
  await call(host,'host','sendChat',['Public chat across private contexts']);
  await until(async()=> (await call(guest,'guest-old','snapshot')).messages.some(m=>m.text==='Public chat across private contexts'),'chat synchronization');
  await contexts[1].close();players.delete('guest-old');
@@ -114,7 +114,7 @@ try{
  await host.frameLocator('#panel').getByRole('heading',{name:'Récupérer un héros',exact:true}).waitFor();
  assert.equal((await call(returning,'guest-new','snapshot')).session.characterId,undefined,'No automatic identity matching by name');
  await host.frameLocator('#panel').getByRole('button',{name:'Autoriser',exact:true}).click();
- await until(async()=> (await call(returning,'guest-new','snapshot')).session.characterId===heroId,'approved recovery');
+ await until(async()=> (await call(returning,'guest-new','snapshot')).session.characterId===heroId,'approved recovery',90000);
  const recovered=await call(host,'host','snapshot');assert.equal(recovered.sheets['guest-new'].notes,'SECRET_ROOM_PROGRESS');assert.equal(recovered.sheets['guest-new'].autresAccessoires[0].nom,'Keepsake');
  await returning.evaluate(()=>document.querySelector('#panel').remove());
  await call(host,'host','broadcastRoll',['Force','D8 : 4',{public:true,rollVisual:{label:'Force',potential:5,outcome:'success',successes:4,dice:[{sides:8,value:4,kind:'diff',outcome:'success'}]}}]);

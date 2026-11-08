@@ -12,7 +12,21 @@ async function transform(bytes: Uint8Array, unpack = false) {
 export type NativeWire = { connectionId: string; send: (data: unknown) => Promise<void>; subscribe: (fn:(event:{connectionId:string;data:unknown})=>void)=>()=>void };
 export function createNativePeerBridge(wire: NativeWire) {
   const peers = new Map<string, NativePeer>();
-  const stats={created:0,localDescriptions:0,remoteDescriptions:0,readySent:0,readyReceived:0,packets:0,unknownPeer:0,wrongConnection:0,lastError:'',lastClose:'',sentTypes:{} as Record<string,number>,receivedTypes:{} as Record<string,number>};
+  // Share the budget across peers and control packets, not just each transfer.
+  let outgoing=Promise.resolve();let lastSend=0;let stopped=false;
+  const wait=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
+  const scheduledSend=(packet:unknown)=>{
+    const task=outgoing.then(async()=>{
+      for(let attempt=0;attempt<4;attempt++){
+        if(stopped)throw new Error('Transport stopped');
+        const delay=100-(Date.now()-lastSend);if(delay>0)await wait(delay);
+        if(stopped)throw new Error('Transport stopped');lastSend=Date.now();
+        try {await wire.send(packet);return;}
+        catch(error){if(attempt===3)throw error;stats.retries++;await wait(500*2**attempt);}
+      }
+    });outgoing=task.catch(()=>{});return task;
+  };
+  const stats={created:0,localDescriptions:0,remoteDescriptions:0,readySent:0,readyReceived:0,packets:0,unknownPeer:0,wrongConnection:0,lastError:'',lastClose:'',retries:0,sentTypes:{} as Record<string,number>,receivedTypes:{} as Record<string,number>};
   class Channel {
     readyState: RTCDataChannelState='connecting'; bufferedAmount=0; bufferedAmountLowThreshold=64000;
     onopen:any;onmessage:any;onclose:any;onbufferedamountlow:any;
@@ -51,22 +65,22 @@ export function createNativePeerBridge(wire: NativeWire) {
       }
     }
     open(){if(!this.channel||this.channel.readyState!=='connecting')return;this.channel.readyState='open';this.connectionState='connected';this.onconnectionstatechange?.();this.channel.onopen?.(new Event('open'));}
-    send(packet:any){stats.sentTypes[packet.type]=(stats.sentTypes[packet.type]||0)+1;if(packet.type==='ready')stats.readySent++;return wire.send({...packet,target:this.remoteId,sender:this.id});}
+    send(packet:any){stats.sentTypes[packet.type]=(stats.sentTypes[packet.type]||0)+1;if(packet.type==='ready')stats.readySent++;return scheduledSend({...packet,target:this.remoteId,sender:this.id});}
     async flush(){
       if(this.sending||this.channel?.readyState!=='open')return;this.sending=true;let phase='prepare';
       try {while(this.queue.length&&this.channel?.readyState==='open'){
-        const frames:string[]=[];let size=0;while(this.queue.length&&size<32000){const frame=this.queue.shift()!;frames.push(frame);size+=frame.length;}
+        const frames:string[]=[];let size=0;while(this.queue.length&&size<32000&&frames.length<64){const frame=this.queue.shift()!;frames.push(frame);size+=frame.length;}
         const seq=++this.sent;const iv=crypto.getRandomValues(new Uint8Array(12));
         const aad=new TextEncoder().encode(this.id+':'+this.remoteId+':'+seq);
         phase='compress';const packed=await transform(new TextEncoder().encode(JSON.stringify(frames)));
         phase='encrypt';const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad},this.key!,packed as BufferSource);
-        const body=encode(new Uint8Array(cipher));const count=Math.ceil(body.length/6000);
+        const body=encode(new Uint8Array(cipher));const count=Math.ceil(body.length/12000);
         let accepted=false;
         for(let attempt=0;attempt<4&&!accepted;attempt++){
-          const ack=new Promise<void>((resolve,reject)=>{this.pending={seq,resolve,reject};this.timer=setTimeout(()=>reject(new Error('Owlbear packet timeout')),5000);});
+          const ack=new Promise<void>((resolve,reject)=>{this.pending={seq,resolve,reject};});
           void ack.catch(()=>{});
-          try {phase='broadcast';for(let index=0;index<count;index++)await this.send({type:'data',seq,index,count,iv:encode(iv),text:body.slice(index*6000,(index+1)*6000)});phase='ack';await ack;accepted=true;}
-          catch(error) {if(attempt===3)throw error;}finally{clearTimeout(this.timer);this.pending=undefined;}
+          try {phase='broadcast';for(let index=0;index<count;index++)await this.send({type:'data',seq,index,count,iv:encode(iv),text:body.slice(index*12000,(index+1)*12000)});phase='ack';this.timer=setTimeout(()=>this.pending?.reject(new Error('Owlbear packet timeout')),5000);await ack;accepted=true;}
+          catch(error) {if(phase==='broadcast'||attempt===3)throw error;await wait(500*2**attempt);}finally{clearTimeout(this.timer);this.pending=undefined;}
         }
         this.channel!.bufferedAmount=Math.max(0,this.channel!.bufferedAmount-size*2);
         if(this.channel!.bufferedAmount<=this.channel!.bufferedAmountLowThreshold)this.channel!.onbufferedamountlow?.(new Event('bufferedamountlow'));
@@ -78,7 +92,7 @@ export function createNativePeerBridge(wire: NativeWire) {
       if(packet.type==='ready-ack'){stats.readyReceived++;clearInterval(this.readyTimer);this.open();return;}
       if(packet.type==='close'){if(typeof packet.reason==='string')stats.lastError='remote: '+packet.reason.slice(0,250);this.close(false);return;}
       if(packet.type==='ack'){if(this.pending && packet.seq===this.pending.seq)this.pending.resolve();return;}
-      if(packet.type!=='data'||!Number.isSafeInteger(packet.seq)||packet.seq<1||!Number.isInteger(packet.count)||packet.count<1||packet.count>32||!Number.isInteger(packet.index)||packet.index<0||packet.index>=packet.count||typeof packet.text!=='string'||packet.text.length>6000||typeof packet.iv!=='string'||packet.iv.length!==16)return;
+      if(packet.type!=='data'||!Number.isSafeInteger(packet.seq)||packet.seq<1||!Number.isInteger(packet.count)||packet.count<1||packet.count>32||!Number.isInteger(packet.index)||packet.index<0||packet.index>=packet.count||typeof packet.text!=='string'||packet.text.length>12000||typeof packet.iv!=='string'||packet.iv.length!==16)return;
       if(packet.seq<=this.received){await this.send({type:'ack',seq:packet.seq});return;}
       if(packet.seq!==this.received+1)return;
       if(!this.chunks||this.chunks.seq!==packet.seq||Date.now()-this.chunks.created>30000)this.chunks={seq:packet.seq,count:packet.count,iv:packet.iv,parts:new Map(),created:Date.now()};
@@ -100,5 +114,5 @@ export function createNativePeerBridge(wire: NativeWire) {
     if(event.connectionId!==peer.remoteConnection){stats.wrongConnection++;return;}
     peer.receiving=peer.receiving.then(()=>peer.receive(packet)).catch((error: unknown)=>{stats.lastError='receive: '+errorText(error).slice(0,250);peer.close(true,stats.lastError);});
   });
-  return { diagnostics:()=>({...stats,peers:[...peers.values()].map(peer=>({state:peer.connectionState,remote:Boolean(peer.remoteId),keys:Boolean(peer.key),channel:peer.channel?.readyState}))}), create:()=>new NativePeer() as unknown as RTCPeerConnection, stop:()=>{unsubscribe();for(const peer of peers.values())peer.close();} };
+  return { diagnostics:()=>({...stats,peers:[...peers.values()].map(peer=>({state:peer.connectionState,remote:Boolean(peer.remoteId),keys:Boolean(peer.key),channel:peer.channel?.readyState}))}), create:()=>new NativePeer() as unknown as RTCPeerConnection, stop:()=>{stopped=true;unsubscribe();for(const peer of peers.values())peer.close(false);} };
 }
