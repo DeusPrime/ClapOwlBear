@@ -1,5 +1,6 @@
 /** Ordered, encrypted room transport carried by Owlbear rather than a direct WebRTC connection. */
 const PREFIX = 'clap-native-v1:';
+const errorText = (error: unknown) => error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : typeof error === 'string' ? error : 'Erreur sans message';
 const encode = (bytes: Uint8Array) => { let value = ''; for (let i=0;i<bytes.length;i+=8192) value += String.fromCharCode(...bytes.subarray(i,i+8192)); return btoa(value); };
 const decode = (value: string) => Uint8Array.from(atob(value), c => c.charCodeAt(0));
 async function transform(bytes: Uint8Array, unpack = false) {
@@ -11,7 +12,7 @@ async function transform(bytes: Uint8Array, unpack = false) {
 export type NativeWire = { connectionId: string; send: (data: unknown) => Promise<void>; subscribe: (fn:(event:{connectionId:string;data:unknown})=>void)=>()=>void };
 export function createNativePeerBridge(wire: NativeWire) {
   const peers = new Map<string, NativePeer>();
-  const stats={created:0,localDescriptions:0,remoteDescriptions:0,readySent:0,readyReceived:0,packets:0,unknownPeer:0,wrongConnection:0,lastError:''};
+  const stats={created:0,localDescriptions:0,remoteDescriptions:0,readySent:0,readyReceived:0,packets:0,unknownPeer:0,wrongConnection:0,lastError:'',lastClose:'',sentTypes:{} as Record<string,number>,receivedTypes:{} as Record<string,number>};
   class Channel {
     readyState: RTCDataChannelState='connecting'; bufferedAmount=0; bufferedAmountLowThreshold=64000;
     onopen:any;onmessage:any;onclose:any;onbufferedamountlow:any;
@@ -50,32 +51,32 @@ export function createNativePeerBridge(wire: NativeWire) {
       }
     }
     open(){if(!this.channel||this.channel.readyState!=='connecting')return;this.channel.readyState='open';this.connectionState='connected';this.onconnectionstatechange?.();this.channel.onopen?.(new Event('open'));}
-    send(packet:any){if(packet.type==='ready')stats.readySent++;return wire.send({...packet,target:this.remoteId,sender:this.id});}
+    send(packet:any){stats.sentTypes[packet.type]=(stats.sentTypes[packet.type]||0)+1;if(packet.type==='ready')stats.readySent++;return wire.send({...packet,target:this.remoteId,sender:this.id});}
     async flush(){
-      if(this.sending||this.channel?.readyState!=='open')return;this.sending=true;
+      if(this.sending||this.channel?.readyState!=='open')return;this.sending=true;let phase='prepare';
       try {while(this.queue.length&&this.channel?.readyState==='open'){
         const frames:string[]=[];let size=0;while(this.queue.length&&size<32000){const frame=this.queue.shift()!;frames.push(frame);size+=frame.length;}
         const seq=++this.sent;const iv=crypto.getRandomValues(new Uint8Array(12));
         const aad=new TextEncoder().encode(this.id+':'+this.remoteId+':'+seq);
-        const packed=await transform(new TextEncoder().encode(JSON.stringify(frames)));
-        const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad},this.key!,packed as BufferSource);
+        phase='compress';const packed=await transform(new TextEncoder().encode(JSON.stringify(frames)));
+        phase='encrypt';const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad},this.key!,packed as BufferSource);
         const body=encode(new Uint8Array(cipher));const count=Math.ceil(body.length/6000);
         let accepted=false;
         for(let attempt=0;attempt<4&&!accepted;attempt++){
           const ack=new Promise<void>((resolve,reject)=>{this.pending={seq,resolve,reject};this.timer=setTimeout(()=>reject(new Error('Owlbear packet timeout')),5000);});
           void ack.catch(()=>{});
-          try {for(let index=0;index<count;index++)await this.send({type:'data',seq,index,count,iv:encode(iv),text:body.slice(index*6000,(index+1)*6000)});await ack;accepted=true;}
-          catch {if(attempt===3)throw new Error('Connexion Owlbear interrompue.');}finally{clearTimeout(this.timer);this.pending=undefined;}
+          try {phase='broadcast';for(let index=0;index<count;index++)await this.send({type:'data',seq,index,count,iv:encode(iv),text:body.slice(index*6000,(index+1)*6000)});phase='ack';await ack;accepted=true;}
+          catch(error) {if(attempt===3)throw error;}finally{clearTimeout(this.timer);this.pending=undefined;}
         }
         this.channel!.bufferedAmount=Math.max(0,this.channel!.bufferedAmount-size*2);
         if(this.channel!.bufferedAmount<=this.channel!.bufferedAmountLowThreshold)this.channel!.onbufferedamountlow?.(new Event('bufferedamountlow'));
-      }}catch{this.connectionState='failed';this.onconnectionstatechange?.();this.close();}finally{this.sending=false;}
+      }}catch(error){stats.lastError='send/'+phase+': '+errorText(error).slice(0,250);this.close(true,stats.lastError);}finally{this.sending=false;}
     }
     async receive(packet:any){
       if(this.connectionState==='closed')return;
       if(packet.type==='ready'){stats.readyReceived++;this.open();if(this.remoteDescription?.type==='offer')await this.send({type:'ready-ack'});return;}
       if(packet.type==='ready-ack'){stats.readyReceived++;clearInterval(this.readyTimer);this.open();return;}
-      if(packet.type==='close'){this.close(false);return;}
+      if(packet.type==='close'){if(typeof packet.reason==='string')stats.lastError='remote: '+packet.reason.slice(0,250);this.close(false);return;}
       if(packet.type==='ack'){if(this.pending && packet.seq===this.pending.seq)this.pending.resolve();return;}
       if(packet.type!=='data'||!Number.isSafeInteger(packet.seq)||packet.seq<1||!Number.isInteger(packet.count)||packet.count<1||packet.count>32||!Number.isInteger(packet.index)||packet.index<0||packet.index>=packet.count||typeof packet.text!=='string'||packet.text.length>6000||typeof packet.iv!=='string'||packet.iv.length!==16)return;
       if(packet.seq<=this.received){await this.send({type:'ack',seq:packet.seq});return;}
@@ -91,13 +92,13 @@ export function createNativePeerBridge(wire: NativeWire) {
       clearInterval(this.readyTimer);this.open();
       this.received=packet.seq;this.chunks=undefined;for(const frame of frames)this.channel?.onmessage?.({data:frame});await this.send({type:'ack',seq:packet.seq});
     }
-    close(notify=true){clearInterval(this.readyTimer);if(this.connectionState==='closed')return;if(notify&&this.remoteId)void this.send({type:'close'}).catch(()=>{});this.connectionState='closed';clearTimeout(this.timer);this.pending?.reject(new Error('Closed'));this.queue=[];peers.delete(this.id);if(this.channel){this.channel.readyState='closed';this.channel.onclose?.(new Event('close'));}this.onconnectionstatechange?.();}
+    close(notify=true,reason?:string){clearInterval(this.readyTimer);if(this.connectionState==='closed')return;stats.lastClose=notify?'local':'remote';if(notify&&this.remoteId)void this.send({type:'close',...(reason?{reason}: {})}).catch(()=>{});this.connectionState='closed';clearTimeout(this.timer);this.pending?.reject(new Error('Closed'));this.queue=[];peers.delete(this.id);if(this.channel){this.channel.readyState='closed';this.channel.onclose?.(new Event('close'));}this.onconnectionstatechange?.();}
   }
   const unsubscribe=wire.subscribe(event=>{
-    stats.packets++;const packet=event.data as any;const peer=packet&&peers.get(packet.target);
+    stats.packets++;const packet=event.data as any;if(typeof packet?.type==='string')stats.receivedTypes[packet.type]=(stats.receivedTypes[packet.type]||0)+1;const peer=packet&&peers.get(packet.target);
     if(!peer||packet.sender!==peer.remoteId){stats.unknownPeer++;return;}
     if(event.connectionId!==peer.remoteConnection){stats.wrongConnection++;return;}
-    peer.receiving=peer.receiving.then(()=>peer.receive(packet)).catch((error: unknown)=>{stats.lastError=error instanceof Error?error.message:String(error);peer.close();});
+    peer.receiving=peer.receiving.then(()=>peer.receive(packet)).catch((error: unknown)=>{stats.lastError='receive: '+errorText(error).slice(0,250);peer.close(true,stats.lastError);});
   });
   return { diagnostics:()=>({...stats,peers:[...peers.values()].map(peer=>({state:peer.connectionState,remote:Boolean(peer.remoteId),keys:Boolean(peer.key),channel:peer.channel?.readyState}))}), create:()=>new NativePeer() as unknown as RTCPeerConnection, stop:()=>{unsubscribe();for(const peer of peers.values())peer.close();} };
 }

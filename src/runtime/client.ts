@@ -1,6 +1,7 @@
 declare const __APP_VERSION__: string;
 let readConnectionDiagnostics: () => unknown = () => undefined;
 export const copyConnectionDiagnostics = () => navigator.clipboard.writeText(JSON.stringify({interface:typeof __APP_VERSION__==='string'?__APP_VERSION__:'development',moteur:readConnectionDiagnostics() || 'aucun diagnostic reçu du moteur'}, null, 2));
+export const connectionError = (): string => { const state=readConnectionDiagnostics() as any;return state?.transport?.lastError || state?.session?.error || state?.signals?.lastError || ''; };
 let peerFactory: ((config: RTCConfiguration) => RTCPeerConnection) | undefined;
 export const configurePeerFactory = (factory: (config: RTCConfiguration) => RTCPeerConnection) => { peerFactory = factory; };
 export const createRoomPeer = (config: RTCConfiguration) => peerFactory ? peerFactory(config) : new RTCPeerConnection(config);

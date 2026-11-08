@@ -458,6 +458,7 @@ export class RoomClient {
   async setRoomTitle(title:string){await this.api('/title',{title});await this.refreshRoom();this.persist();}
   private integrationChanging=false;
   isRoomTransitioning(){return this.integrationChanging||this.busy;}
+  connectionState(){return {ticks:this.connectionTickCount,lastTickAt:this.connectionLastTick,offers:this.connectionOfferCount,signalError:this.connectionSignalError,lastPeerClose:this.connectionLastPeerClose,hostPresent:this.state.members.some(member=>member.role==='mj'&&member.online),stopped:this.stopped,busy:this.busy,role:this.state.session?.role,lockHeld:Boolean(this.releaseLock),error:this.state.error,memberRoles:this.state.members.map(member=>({role:member.role,online:member.online,self:member.id===this.state.session?.id})),peers:[...this.peers.values()].map(peer=>({implementation:peer.pc.constructor.name,state:peer.pc.connectionState,signaling:peer.pc.signalingState,channel:peer.transport?.channel.readyState}))};}
   async linkSiteRoom(link:string){
     this.integrationChanging=true;
     try{const config=await this.api<{room:string}>('/integration/validate',{link});const name=this.state.session?.name||'MJ Owlbear';
@@ -584,7 +585,8 @@ export class RoomClient {
       if (!transport.send({ kind: 'hero-select', id, characterId })) { clearTimeout(timer); this.pendingCommands.delete(id); reject(new Error('Envoi impossible.')); }
     });
   }
-  private closePeer(id: string) {
+  private connectionLastPeerClose="";
+  private closePeer(id: string, reason="session cleanup") {if(this.peers.has(id))this.connectionLastPeerClose=reason;
     const peer = this.peers.get(id);
     this.peers.delete(id); peer?.transport?.close(); peer?.pc.close();
     const sheets = { ...this.state.sheets }; delete sheets[id];
@@ -593,7 +595,7 @@ export class RoomClient {
     this.update({ sheetResources, sheets, connected: this.state.connected.filter(key => key !== id) });
   }
   private newPeer(member: RoomMember, connection: string) {
-    this.closePeer(member.id);
+    this.closePeer(member.id,"new negotiation");
     const pc = createRoomPeer({ iceServers: this.iceServers });
     const peer: Peer = { pc, connection, instance: member.instance, started: Date.now(), sheet: "" };
     this.peers.set(member.id, peer);
@@ -615,10 +617,10 @@ export class RoomClient {
         if (this.state.session?.role === 'mj') peer.transport?.send(this.gameState(member));
       };
       if (channel.readyState === "open") channel.onopen.call(channel, new Event("open"));
-      channel.onclose = () => { if (this.peers.get(member.id) === peer) this.closePeer(member.id); };
+      channel.onclose = () => { if (this.peers.get(member.id) === peer) this.closePeer(member.id,"channel closed"); };
     };
     pc.onconnectionstatechange = () => {
-      if (this.peers.get(member.id) === peer && ["failed", "closed"].includes(pc.connectionState)) this.closePeer(member.id);
+      if (this.peers.get(member.id) === peer && ["failed", "closed"].includes(pc.connectionState)) this.closePeer(member.id,"transport "+pc.connectionState);
     };
     if (this.state.session?.role === "player") attach(pc.createDataChannel("clap", { ordered: true }));
     else pc.ondatachannel = event => attach(event.channel);
@@ -639,7 +641,7 @@ export class RoomClient {
     }
     return peer.pc.localDescription!.toJSON();
   }
-  private async offer(member: RoomMember, generation: number) {
+  private async offer(member: RoomMember, generation: number) {this.connectionOfferCount++;
     const peer = this.newPeer(member, crypto.randomUUID());
     const description = await this.description(peer);
     if (generation !== this.generation || this.peers.get(member.id) !== peer) return;
@@ -833,7 +835,8 @@ export class RoomClient {
     const requests = targets.map(member => rollRequestSchema.parse({ id: crypto.randomUUID(), requester: session.id, target: member.id, label, attributes, die, created: Date.now() }));
     this.game = { ...this.game, requests: [...this.game.requests, ...requests] }; this.publishGame();
   }
-  private async tick(generation: number) {
+  private connectionTickCount=0; private connectionLastTick=0; private connectionOfferCount=0; private connectionSignalError="";
+  private async tick(generation: number) {this.connectionTickCount++;this.connectionLastTick=Date.now();
     if (this.stopped || generation !== this.generation) return;
     try {
       const poll = await this.api<RoomPoll>("/poll", { since: this.since, instance: this.instance });
@@ -841,7 +844,7 @@ export class RoomClient {
       if (!this.applyRoomPoll(poll)) { if (!this.stopped && generation === this.generation) this.timer = setTimeout(() => void this.tick(generation), 3000); return; }
       for (const [id, peer] of this.peers) {
         const member = poll.members.find(m => m.id === id);
-        if (!member?.online || member.instance !== peer.instance || (peer.transport?.channel.readyState !== "open" && Date.now() - peer.started > 30000)) this.closePeer(id);
+        if (!member?.online || member.instance !== peer.instance || (peer.transport?.channel.readyState !== "open" && Date.now() - peer.started > 30000)) this.closePeer(id,!member?.online?"participant offline":member.instance!==peer.instance?"participant instance changed":"negotiation timeout");
       }
       if (this.state.session?.role === 'mj') {
         for (const [id, peer] of this.peers) this.sendAssignment(id, peer);
@@ -849,7 +852,7 @@ export class RoomClient {
       }
       for (const signal of poll.signals) {
         try { await this.signal(signal, generation); }
-        catch { if (generation === this.generation) this.closePeer(signal.sender); }
+        catch(error) { this.connectionSignalError=error instanceof Error?error.message:String(error);if (generation === this.generation) this.closePeer(signal.sender); }
         if (generation !== this.generation) return;
         this.since = Math.max(this.since, signal.seq);
       }

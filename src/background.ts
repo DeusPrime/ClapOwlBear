@@ -33,6 +33,7 @@ async function start() {
     report: error => { toastError=error;window.dispatchEvent(new Event('clap-integration-state')); },
   }, new URL('roll-toast.html?v='+__APP_VERSION__,location.href).href);
   const stopRollNotifications = watchPublicRolls(roomClient, rollToasts.show);
+  const runtimeStarted=Date.now();
   const archiveKey = `clap-owlbear-archive:${port.roomId}:${self.id}`;
   let connecting = false,
     joinError = "",
@@ -46,7 +47,7 @@ async function start() {
   };
   serveRoomClient(roomClient, channel, remember, () => ({
     error: roomClient.snapshot().error || joinError || toastError || service.notice,
-    connectionDiagnostics: { version: __APP_VERSION__, mode:service.linked?'site':'native',role:self.role,members:roomClient.snapshot().members.length,connected:roomClient.snapshot().connected.length,signals:service.diagnostics,transport:bridge.diagnostics() },
+    connectionDiagnostics: { capturedAt:new Date().toISOString(),runtimeAgeSeconds:Math.round((Date.now()-runtimeStarted)/1000),session:roomClient.connectionState(), version: __APP_VERSION__, mode:service.linked?'site':'native',role:self.role,members:roomClient.snapshot().members.length,connected:roomClient.snapshot().connected.length,signals:service.diagnostics,transport:bridge.diagnostics() },
   }));
   roomClient.subscribe(() => {
     void remember();

@@ -21,6 +21,7 @@ source = source.replace(
   `  async setRoomTitle(title:string){await this.api('/title',{title});await this.refreshRoom();this.persist();}
   private integrationChanging=false;
   isRoomTransitioning(){return this.integrationChanging||this.busy;}
+  connectionState(){return {ticks:this.connectionTickCount,lastTickAt:this.connectionLastTick,offers:this.connectionOfferCount,signalError:this.connectionSignalError,lastPeerClose:this.connectionLastPeerClose,hostPresent:this.state.members.some(member=>member.role==='mj'&&member.online),stopped:this.stopped,busy:this.busy,role:this.state.session?.role,lockHeld:Boolean(this.releaseLock),error:this.state.error,memberRoles:this.state.members.map(member=>({role:member.role,online:member.online,self:member.id===this.state.session?.id})),peers:[...this.peers.values()].map(peer=>({implementation:peer.pc.constructor.name,state:peer.pc.connectionState,signaling:peer.pc.signalingState,channel:peer.transport?.channel.readyState}))};}
   async linkSiteRoom(link:string){
     this.integrationChanging=true;
     try{const config=await this.api<{room:string}>('/integration/validate',{link});const name=this.state.session?.name||'MJ Owlbear';
@@ -30,6 +31,14 @@ source = source.replace(
   async unlinkSiteRoom(){this.integrationChanging=true;try{const name=this.state.session?.name||'MJ Owlbear';if(this.state.session)await this.leave();await this.api('/integration/unlink',{},null);await this.enter(name,undefined,undefined,{title:'Salle CLAP!'});}finally{this.integrationChanging=false;}}
   async sendChat(text: string, target?: string) {`,
 );
+source = source.replace('  private async tick(generation: number) {', '  private connectionTickCount=0; private connectionLastTick=0; private connectionOfferCount=0; private connectionSignalError="";\n  private async tick(generation: number) {this.connectionTickCount++;this.connectionLastTick=Date.now();');
+source = source.replace('  private async offer(member: RoomMember, generation: number) {', '  private async offer(member: RoomMember, generation: number) {this.connectionOfferCount++;');
+source = source.replace('catch { if (generation === this.generation) this.closePeer(signal.sender); }', 'catch(error) { this.connectionSignalError=error instanceof Error?error.message:String(error);if (generation === this.generation) this.closePeer(signal.sender); }');
+source = source.replace('  private closePeer(id: string) {', '  private connectionLastPeerClose="";\n  private closePeer(id: string, reason="session cleanup") {if(this.peers.has(id))this.connectionLastPeerClose=reason;');
+source = source.replace('    this.closePeer(member.id);\n    const pc', '    this.closePeer(member.id,"new negotiation");\n    const pc');
+source = source.replace('this.closePeer(member.id); };', 'this.closePeer(member.id,"channel closed"); };');
+source = source.replace('this.closePeer(member.id);\n    };', 'this.closePeer(member.id,"transport "+pc.connectionState);\n    };');
+source = source.replace('if (!member?.online || member.instance !== peer.instance || (peer.transport?.channel.readyState !== "open" && Date.now() - peer.started > 30000)) this.closePeer(id);', 'if (!member?.online || member.instance !== peer.instance || (peer.transport?.channel.readyState !== "open" && Date.now() - peer.started > 30000)) this.closePeer(id,!member?.online?"participant offline":member.instance!==peer.instance?"participant instance changed":"negotiation timeout");');
 source = source.replace("new RTCPeerConnection({ iceServers: this.iceServers })", "createRoomPeer({ iceServers: this.iceServers })");
 source = source.replace(
   "export const roomClient = new RoomClient();",
@@ -90,6 +99,6 @@ save(root + "lib/studioImport.ts", studio);
 await import("./strict-site.mjs");
 
 let heroAssignments = read(root + 'components/RoomHeroAssignments.tsx');
-heroAssignments = "import {copyConnectionDiagnostics} from '@owlbear/runtime/client';\n" + heroAssignments;
-heroAssignments = heroAssignments.replace('{localizeText("En attente de connexion du joueur pour transmettre la fiche.")}</p>', '{localizeText("En attente de connexion du joueur pour transmettre la fiche.")} <button type="button" className="ml-2 underline" onClick={() => void copyConnectionDiagnostics()}>Copier le diagnostic connexion</button></p>');
+heroAssignments = "import {copyConnectionDiagnostics,connectionError} from '@owlbear/runtime/client';\n" + heroAssignments;
+heroAssignments = heroAssignments.replace('{localizeText("En attente de connexion du joueur pour transmettre la fiche.")}</p>', '{localizeText("En attente de connexion du joueur pour transmettre la fiche.")} <button type="button" className="ml-2 underline" onClick={() => void copyConnectionDiagnostics()}>Copier le diagnostic connexion</button><span className="mt-1 block text-destructive">{connectionError()}</span></p>');
 save(root + 'components/RoomHeroAssignments.tsx',heroAssignments);

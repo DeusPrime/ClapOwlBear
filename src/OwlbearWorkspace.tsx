@@ -1,4 +1,4 @@
-import { copyConnectionDiagnostics } from "./runtime/client";
+import { copyConnectionDiagnostics, connectionError } from "./runtime/client";
 import { roomClient } from "@/lib/roomClient";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -23,7 +23,7 @@ function ConnectionStatus() {
   if(!info)return null;
   const disconnected=room.members.some(member=>member.id!==room.session?.id&&!room.connected.includes(member.id));
   if(!disconnected)return null;
-  return <div className="mt-3 space-y-2 rounded border border-ink/20 p-3 text-sm"><p>Connexion aux participants en cours…</p><button type="button" className="underline" onClick={()=>{void copyConnectionDiagnostics().then(()=>setCopied(true));}}>{copied?'Diagnostic copié':'Copier le diagnostic connexion'}</button><details><summary className="cursor-pointer text-xs">Détails de connexion</summary><pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs">{JSON.stringify(info,null,2)}</pre></details></div>;
+  return <div className="mt-3 space-y-2 rounded border border-ink/20 p-3 text-sm"><p>Connexion aux participants en cours…</p>{connectionError() && <p role="alert" className="text-destructive">{connectionError()}</p>}<button type="button" className="underline" onClick={()=>{void copyConnectionDiagnostics().then(()=>setCopied(true));}}>{copied?'Diagnostic copié':'Copier le diagnostic connexion'}</button><details><summary className="cursor-pointer text-xs">Détails de connexion</summary><pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs">{JSON.stringify(info,null,2)}</pre></details></div>;
 }
 function Resources() {
   const room = useRoom();

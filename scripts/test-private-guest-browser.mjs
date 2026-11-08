@@ -66,7 +66,7 @@ const server=createServer(async(req,res)=>{try{
  res.setHeader('Content-Type',({'.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.json':'application/json'})[extname(path)]||'application/octet-stream');res.end(await readFile(path));
 }catch(error){res.statusCode=404;res.end();}});
 await new Promise(resolve=>server.listen(0,resolve));const port=server.address().port;
-const browser=await chromium.launch({channel:'chrome',headless:true});const contexts=[];const errors=[];
+const browser=await chromium.launch({channel:'chrome',headless:true,...(process.env.CLAP_REAL_TIMERS==='1'?{ignoreDefaultArgs:['--disable-background-timer-throttling','--disable-backgrounding-occluded-windows','--disable-renderer-backgrounding']}: {})});const contexts=[];const errors=[];
 async function participant(id){const context=await browser.newContext({viewport:{width:1000,height:850}});contexts.push(context);
  await context.addInitScript(()=>{window.RTCPeerConnection=class{constructor(){throw new Error('Direct WebRTC must not be used in native Owlbear');}};});
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:'+port+'/qa?player='+id);await page.frameLocator('#panel').getByRole('tab').first().waitFor({timeout:30000});return page;}

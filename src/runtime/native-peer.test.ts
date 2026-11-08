@@ -26,3 +26,9 @@ it('retries a lost ready message without falsely marking the player connected', 
   const a=createNativePeerBridge(wire('p')),b=createNativePeerBridge(wire('h'));const player=a.create(),host=b.create();const channel=player.createDataChannel('room');host.ondatachannel=()=>{};
   try{await player.setLocalDescription();await host.setRemoteDescription(player.localDescription!);await host.setLocalDescription();await player.setRemoteDescription(host.localDescription!);expect(channel.readyState).toBe('connecting');await expect.poll(()=>channel.readyState,{timeout:3000}).toBe('open');expect(a.diagnostics().readySent).toBeGreaterThanOrEqual(2);}finally{a.stop();b.stop();}
 });
+it('retains and propagates the SDK send failure instead of closing with an empty error', async () => {
+  const listeners=new Map<string,(event:any)=>void>();
+  const wire=(id:string)=>({connectionId:id,subscribe:(fn:any)=>{listeners.set(id,fn);return()=>{};},send:async(data:any)=>{if(id==='h'&&data.type==='data')throw new Error('SDK rejected packet QA');for(const [other,fn]of listeners)if(other!==id)queueMicrotask(()=>fn({connectionId:id,data:structuredClone(data)}));}});
+  const a=createNativePeerBridge(wire('p')),b=createNativePeerBridge(wire('h'));const player=a.create(),host=b.create();player.createDataChannel('room');let channel:RTCDataChannel|undefined;host.ondatachannel=event=>{channel=event.channel;};
+  try{await player.setLocalDescription();await host.setRemoteDescription(player.localDescription!);await host.setLocalDescription();await player.setRemoteDescription(host.localDescription!);await expect.poll(()=>channel?.readyState).toBe('open');channel!.send('room state');await expect.poll(()=>b.diagnostics().lastError).toContain('SDK rejected packet QA');await expect.poll(()=>a.diagnostics().lastError).toContain('SDK rejected packet QA');}finally{a.stop();b.stop();}
+});
