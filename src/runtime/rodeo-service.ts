@@ -1,10 +1,15 @@
-﻿import OBR from "@owlbear-rodeo/sdk";
+import { siteRoomApi, validateSiteLink, type SiteLink } from "./site-service";
+import OBR from "@owlbear-rodeo/sdk";
 import type { Player } from "@owlbear-rodeo/sdk";
 import type { RoomSession, RoomPoll, RoomSignal } from "@/lib/roomProtocol";
 export const ROOM_KEY = "fr.clap.owlbear/v2/room",
   PLAYER_KEY = "fr.clap.owlbear/v2/player";
+export const HOST_KEY = "fr.clap.owlbear/v2/host";
 const SIGNAL = "fr.clap.owlbear/v2/signal";
 type Descriptor = {
+  site?: SiteLink;
+  owlbearRoomId?: string;
+  revision?: number;
   hostId: string;
   epoch: string;
   title: string;
@@ -84,28 +89,33 @@ export class OwlbearRoomService {
     this.dispose?.();
   }
   async descriptor(): Promise<Descriptor | undefined> {
-    const metadata = await this.port.roomMetadata();
-    const d = metadata[ROOM_KEY] as Descriptor | undefined;
-    if (
-      !d ||
-      typeof d.hostId !== "string" ||
-      typeof d.epoch !== "string" ||
-      typeof d.title !== "string" ||
-      !Array.isArray(d.blocked)
-    )
-      return;
     const players = await this.players();
-    // A player cannot acquire MJ privileges by writing an arbitrary host ID into metadata.
-    if (
-      !players.some((player) => player.id === d.hostId && player.role === "GM")
-    )
-      return;
-    return d;
+    const masters = players.filter((player) => player.role === "GM");
+    // Room metadata is discovery only. The GM's own player metadata is the authority,
+    // so a player cannot redirect the table by editing shared room metadata.
+    return masters
+      .map((player) => player.metadata[HOST_KEY] as Descriptor | undefined)
+      .filter((d): d is Descriptor =>
+        Boolean(
+          d &&
+          d.owlbearRoomId === this.port.roomId &&
+          typeof d.hostId === "string" &&
+          typeof d.epoch === "string" &&
+          typeof d.title === "string" &&
+          Array.isArray(d.blocked) &&
+          masters.some((player) => player.id === d.hostId),
+        ),
+      )
+      .sort((a, b) => (b.revision || 0) - (a.revision || 0))[0];
   }
   private async players() {
     return [await this.port.self(), ...(await this.port.others())];
   }
   private async save(d: Descriptor) {
+    const previous = await this.descriptor();
+    d.owlbearRoomId = this.port.roomId;
+    d.revision = Math.max(Date.now(), (previous?.revision || 0) + 1);
+    await this.port.setPlayerMetadata({ [HOST_KEY]: d });
     await this.port.setRoomMetadata({ [ROOM_KEY]: d });
   }
   private async currentHost() {
@@ -137,6 +147,12 @@ export class OwlbearRoomService {
       this.paused = true;
       this.error("Tu as été expulsé de la salle par le MJ.");
     }
+    if (
+      self.id === d.hostId &&
+      (self.metadata[HOST_KEY] as Descriptor | undefined)?.revision !==
+        d.revision
+    )
+      await this.port.setPlayerMetadata({ [HOST_KEY]: d });
     return { self, d, host: self.id === d.hostId };
   }
   api = async (
@@ -144,6 +160,41 @@ export class OwlbearRoomService {
     body: any,
     session: RoomSession | null,
   ): Promise<any> => {
+    if (path.startsWith("/integration/")) {
+      const self = await this.port.self();
+      if (self.role !== "GM" || self.id !== (await this.currentHost()))
+        this.error("Liaison réservée au MJ Owlbear.", 403);
+      if (path === "/integration/validate") return validateSiteLink(body.link);
+      if (path === "/integration/link") {
+        const site = await validateSiteLink(body.link);
+        this.paused = false;
+        await this.save({
+          hostId: self.id,
+          epoch: crypto.randomUUID(),
+          title: "Salle liée au site CLAP!",
+          closed: false,
+          blocked: [],
+          site,
+        });
+        return site;
+      }
+      if (path === "/integration/unlink") {
+        this.paused = false;
+        await this.save({
+          hostId: self.id,
+          epoch: crypto.randomUUID(),
+          title: "Salle CLAP!",
+          closed: true,
+          blocked: [],
+        });
+        return { ok: true };
+      }
+    }
+    const linked = (await this.descriptor())?.site;
+    if (linked) {
+      if (path === "/leave") this.paused = true;
+      return siteRoomApi(this.port, linked, path, body, session);
+    }
     if (path === "/list") return { rooms: [] }; // Owlbear rooms are never registered with the website directory.
     const self = await this.port.self();
     if (path === "" || path === "/join") {
@@ -325,6 +376,7 @@ export class OwlbearRoomService {
       (p) => p.connectionId === event.connectionId,
     );
     const d = await this.descriptor();
+    if (d?.site) return;
     if (
       !sender ||
       !d ||

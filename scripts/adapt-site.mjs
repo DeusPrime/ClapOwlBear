@@ -7,11 +7,9 @@ const start = source.indexOf("  private async api<T>("),
   stop = source.indexOf("  list() {", start);
 if (start < 0 || stop < 0) throw new Error("Upstream API boundary changed");
 source =
-  "import { callRoomApi, sharedRoomClient } from '@owlbear/runtime/client';\n" +
+  "import {callRoomApi,sharedRoomClient} from '@owlbear/runtime/client';\n" +
   source.slice(0, start) +
-  `  private async api<T>(path: string, body: unknown, session = this.state.session): Promise<T> {
-    return callRoomApi<T>(path, body, session);
-  }
+  `  private async api<T>(path:string,body:unknown,session=this.state.session):Promise<T>{return callRoomApi<T>(path,body,session);}
 ` +
   source.slice(stop);
 source = source.replace(
@@ -20,47 +18,56 @@ source = source.replace(
 );
 source = source.replace(
   "  async sendChat(text: string, target?: string) {",
-  `  async setRoomTitle(title: string) { await this.api('/title', {title}); await this.refreshRoom(); this.persist(); }
+  `  async setRoomTitle(title:string){await this.api('/title',{title});await this.refreshRoom();this.persist();}
+  async linkSiteRoom(link:string){
+    const config=await this.api<{room:string}>('/integration/validate',{link});const name=this.state.session?.name||'MJ Owlbear';
+    if(this.state.session)await this.leave();await this.api('/integration/link',{link},null);await this.enter(name,config.room);
+  }
+  async unlinkSiteRoom(){const name=this.state.session?.name||'MJ Owlbear';if(this.state.session)await this.leave();await this.api('/integration/unlink',{},null);await this.enter(name,undefined,undefined,{title:'Salle CLAP!'});}
   async sendChat(text: string, target?: string) {`,
 );
 source = source.replace(
   "export const roomClient = new RoomClient();",
   "export const roomClient = sharedRoomClient(() => new RoomClient());",
 );
-const exportStart = source.indexOf(
-    "    const url = URL.createObjectURL(blob);",
-  ),
-  exportEnd = source.indexOf("\n  private save(", exportStart);
-const expression = source.match(/link\.download = ([^\n]+);/);
-if (exportStart < 0 || exportEnd < 0 || !expression)
+const es = source.indexOf("    const url = URL.createObjectURL(blob);"),
+  ee = source.indexOf("\n  private save(", es),
+  expression = source.match(/link\.download = ([^\n]+);/);
+if (es < 0 || ee < 0 || !expression)
   throw new Error("Upstream export boundary changed");
 source =
-  source.slice(0, exportStart) +
-  `    return {blob, name: ${expression[1]}};
+  source.slice(0, es) +
+  `    return {blob,name:${expression[1]}};
   }
 ` +
-  source.slice(exportEnd);
+  source.slice(ee);
 save(root + "lib/roomClient.ts", source);
 save(
   root + "components/DirectoryMenu.tsx",
-  "export { default } from '@owlbear/GameMenu';",
+  "export {default} from '@owlbear/GameMenu';",
 );
-let manage = read(root + "components/RoomManagement.tsx");
+let manage =
+  "import {isLinkedSite} from '@owlbear/runtime/client';\n" +
+  read(root + "components/RoomManagement.tsx");
 manage = manage.replace(
-  /      <DropdownMenuItem className="min-h-11 gap-3" onSelect=\{\(\) => open\("invitation"\)\}>.*?<\/DropdownMenuItem>\r?\n/,
-  "",
+  /(<DropdownMenuItem className="min-h-11 gap-3" onSelect=\{\(\) => open\("invitation"\)\}>.*?<\/DropdownMenuItem>)/,
+  "{isLinkedSite() && $1}",
 );
 manage = manage.replace(
-  /<DropdownMenuItem className="min-h-11 gap-3" onSelect=\{\(\) => open\("password"\)\}>.*?<\/DropdownMenuItem>/,
-  "",
+  /(<DropdownMenuItem className="min-h-11 gap-3" onSelect=\{\(\) => open\("password"\)\}>.*?<\/DropdownMenuItem>)/,
+  "{isLinkedSite() && $1}",
+);
+manage = manage.replace(
+  "{isMJ && <DropdownMenuItem className=\"min-h-11 gap-3\" onSelect={() => open('owlbear')}",
+  "{isMJ && isLinkedSite() && <DropdownMenuItem className=\"min-h-11 gap-3\" onSelect={() => open('owlbear')}",
 );
 manage = manage.replace(
   'member.role === "player" && room.connected.includes(member.id)',
-  "member.role === \"player\" && member.owlbearRole === 'GM' && room.connected.includes(member.id)",
+  "member.role === \"player\" && (isLinkedSite() || member.owlbearRole === 'GM') && room.connected.includes(member.id)",
 );
 manage = manage.replace(
   "Le joueur choisi devient l’unique MJ. Tu redeviens joueur.",
-  "Le successeur doit avoir le rôle MJ dans Owlbear. Le transfert lui transmet ensuite les données de la partie CLAP!.",
+  "Le joueur choisi devient le MJ de CLAP!. Pour une partie locale Owlbear, donne-lui d’abord le rôle MJ Owlbear.",
 );
 save(root + "components/RoomManagement.tsx", manage);
 let protocol = read(root + "lib/roomProtocol.ts");

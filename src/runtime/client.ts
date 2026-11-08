@@ -12,10 +12,16 @@ export type RuntimeContext = {
   role?: string;
   name?: string;
   code?: string;
+  mode?: "owlbear" | "site";
 };
 let context: RuntimeContext | undefined;
 const runtimeListeners = new Set<() => void>();
 export const runtimeInfo = () => context;
+export const isLinkedSite = () => context?.mode === "site";
+export const siteInvitation = () =>
+  isLinkedSite()
+    ? `https://clapnrole.com/app/salle?room=${context?.code}`
+    : "Invitez les participants depuis Owlbear Rodeo.";
 export const runtimeSubscribe = (listener: () => void) => {
   runtimeListeners.add(listener);
   return () => runtimeListeners.delete(listener);
@@ -65,6 +71,9 @@ const empty = {
 };
 export const commands = new Set([
   "setRoomTitle",
+  "linkSiteRoom",
+  "unlinkSiteRoom",
+  "createOwlbearInvite",
   "setPrivateRefs",
   "addRoomHero",
   "removeRoomHero",
@@ -195,6 +204,7 @@ export function serveRoomClient(
   client: any,
   channel: string,
   onMutation?: () => Promise<void>,
+  integrationState?: () => Record<string, unknown>,
 ) {
   const bus = new BroadcastChannel(channel);
   const events = new Map<
@@ -218,8 +228,12 @@ export function serveRoomClient(
   window.addEventListener("clap-room-reward", forward);
   window.addEventListener("clap-room-character-assigned", forward);
   const publish = () =>
-    bus.postMessage({ type: "snapshot", snapshot: client.snapshot() });
+    bus.postMessage({
+      type: "snapshot",
+      snapshot: { ...client.snapshot(), ...integrationState?.() },
+    });
   const unsubscribe = client.subscribe(publish);
+  window.addEventListener("clap-integration-state", publish);
   bus.onmessage = ({ data }) => {
     void (async () => {
       if (data?.type === "hello") {
@@ -269,6 +283,7 @@ export function serveRoomClient(
   publish();
   return () => {
     unsubscribe();
+    window.removeEventListener("clap-integration-state", publish);
     window.removeEventListener("clap-room-reward", forward);
     window.removeEventListener("clap-room-character-assigned", forward);
     bus.close();

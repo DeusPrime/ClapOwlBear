@@ -1,31 +1,38 @@
 ﻿import OBR from "@owlbear-rodeo/sdk";
 import { configureRuntime } from "./runtime/client";
-import { roomCode } from "./runtime/rodeo-service";
+import { OwlbearRoomService, roomCode, sdkPort } from "./runtime/rodeo-service";
 const app = document.getElementById("app")!;
 app.innerHTML =
   '<p style="padding:24px;font-family:monospace">Connexion à Owlbear Rodeo…</p>';
 if (OBR.isAvailable)
   OBR.onReady(() => {
     void (async () => {
-      const id = await OBR.player.getId(),
-        code = await roomCode(OBR.room.id);
-      const channel = `clap-owlbear:${OBR.room.id}:${id}:${await OBR.player.getConnectionId()}`;
-      configureRuntime({
-        background: false,
-        channel,
-        code,
-        role: await OBR.player.getRole(),
-        name: await OBR.player.getName(),
-      });
-      OBR.player.onChange((player) =>
+      const port = await sdkPort(),
+        id = await OBR.player.getId(),
+        code = await roomCode(port.roomId),
+        service = new OwlbearRoomService(port, code);
+      const channel = `clap-owlbear:${port.roomId}:${id}:${await OBR.player.getConnectionId()}`;
+      const refresh = async () => {
+        const linked = (await service.descriptor())?.site;
         configureRuntime({
           background: false,
           channel,
-          code,
-          role: player.role,
-          name: player.name,
-        }),
-      );
+          code: linked?.room || code,
+          mode: linked ? "site" : "owlbear",
+          role: await OBR.player.getRole(),
+          name: await OBR.player.getName(),
+        });
+      };
+      await refresh();
+      OBR.player.onChange(() => {
+        void refresh();
+      });
+      OBR.party.onChange(() => {
+        void refresh();
+      });
+      OBR.room.onMetadataChange(() => {
+        void refresh();
+      });
       const { mount } = await import("./App");
       mount();
     })().catch((error) => {
@@ -35,4 +42,4 @@ if (OBR.isAvailable)
   });
 else
   app.innerHTML =
-    '<main style="max-width:600px;margin:48px auto;padding:24px;font-family:monospace"><h1>CLAP! pour Owlbear Rodeo</h1><p>Ajoutez cette extension à votre salle Owlbear avec son manifest.json pour accéder aux fiches, au chat et aux outils du MJ.</p><p>Cette interface est intégrée à la salle ; elle ne crée pas de salle sur le site.</p></main>';
+    '<main style="max-width:600px;margin:48px auto;padding:24px;font-family:monospace"><h1>CLAP! pour Owlbear Rodeo</h1><p>Ajoutez cette extension à votre salle Owlbear avec son manifest.json pour accéder aux fiches, au chat et aux outils du MJ.</p></main>';

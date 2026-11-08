@@ -1,6 +1,6 @@
 {
   "source": "DeusPrime/clap-cinematic-quest",
-  "syncedAt": "2026-11-08T10:30:06.990Z",
+  "syncedAt": "2026-11-08T10:56:22.547Z",
   "adaptations": [
     "zod/v3 compatibility",
     "GitHub Pages asset paths",
@@ -391,7 +391,7 @@
     ],
     [
       "vendor/clap-site/src/components/RoomManagement.tsx",
-      "cd2ea3e548d640281151d62ff58198f19e1e61259999063c9b5f8b35c20ec9f8"
+      "7783a3733ba272fe8d0b318fa61fd55e45f9f7d8bb2fa7241ed6fb3a48a31e73"
     ],
     [
       "vendor/clap-site/src/components/RoomMJWorkspace.tsx",
@@ -1071,7 +1071,7 @@
     ],
     [
       "vendor/clap-site/src/lib/roomClient.ts",
-      "77180025459824d0756a327bb3be60f5fd2926f22de49d2699d1cfeea9ca86f3"
+      "841e8215e39ff50a2db5cc071a5f0b60000826b199ca96a32b26d8cb1c7320d9"
     ],
     [
       "vendor/clap-site/src/lib/roomNickname.ts",
@@ -1083,7 +1083,7 @@
     ],
     [
       "vendor/clap-site/src/lib/roomProtocol.ts",
-      "18c8232b38c451f276e3c81320691e79f8d09702540e4382d5ddcf33aa8a6987"
+      "f5e11bb6e979663e490deea076c10f71275aef183d1e5514fc644f84a009ed3a"
     ],
     [
       "vendor/clap-site/src/lib/roomResources.ts",

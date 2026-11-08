@@ -65,7 +65,7 @@ export const roomMessageSchema = z.discriminatedUnion("kind", [
 ]);
 export type RoomMessage = z.infer<typeof roomMessageSchema>;
 export type RoomSession = { room: string; id: string; token: string; name: string; role: "mj" | "player"; localRoomId?: string; roomDirectoryId?: string; receivedAssignment?: string; receivedResourceOps?: string[]; characterId?: string };
-export type RoomMember = { id: string; name: string; role: "mj" | "player"; instance: string; online: boolean; owlbearRole?: "GM" | "PLAYER"; heroName?: string; heroConcept?: string };
+export type RoomMember = { id: string; name: string; role: "mj" | "player"; instance: string; online: boolean; owlbearRole?: "GM" | "PLAYER"; platform?: 'owlbear'; heroName?: string; heroConcept?: string };
 export type RoomSignal = { seq: number; sender: string; senderInstance: string; connection: string; description: RTCSessionDescriptionInit };
 export type RoomChatMessage = import('./localRoomGame').LocalGame['messages'][number];
 export type RoomRollRequest = z.infer<typeof rollRequestSchema>;

@@ -36,7 +36,9 @@ import {
   runtimeInfo,
   runtimeSubscribe,
   notifyViewReady,
+  siteInvitation,
 } from "./runtime/client";
+import SiteLinkPanel from "./SiteLinkPanel";
 import Logo from "@/components/clap/Logo";
 import { Button } from "@/components/ui/button";
 import "@/index.css";
@@ -69,6 +71,14 @@ function useGM() {
 }
 function GM({ children }: { children: ReactNode }) {
   return useGM() ? <>{children}</> : <Navigate to="/app/salle" replace />;
+}
+function RoomAdmin({ children }: { children: ReactNode }) {
+  const info = useSyncExternalStore(runtimeSubscribe, runtimeInfo);
+  return useGM() || info?.role === "GM" ? (
+    <>{children}</>
+  ) : (
+    <Navigate to="/app/salle" replace />
+  );
 }
 function HeroRoute() {
   const { id } = useParams(),
@@ -125,14 +135,22 @@ function RoomView() {
               void roomClient
                 .enter(
                   info?.name || "Joueur",
-                  gm ? undefined : info?.code,
+                  info?.mode === "site"
+                    ? info.code
+                    : gm
+                      ? undefined
+                      : info?.code,
                   undefined,
                   { title: "Salle CLAP!" },
                 )
                 .catch((error) => setConnectionError(error.message));
             }}
           >
-            {gm ? "Ouvrir une partie" : "Rejoindre la partie"}
+            {info?.mode === "site"
+              ? "Rejoindre la salle du site"
+              : gm
+                ? "Ouvrir une partie"
+                : "Rejoindre la partie"}
           </Button>
           {gm && (
             <Link to="/settings" className="p-3 text-sm underline">
@@ -156,7 +174,7 @@ function RoomView() {
           </p>
         </div>
         {room.session.role === "mj" && (
-          <RoomManagement invitation="Invitez les participants depuis la salle Owlbear Rodeo." />
+          <RoomManagement invitation={siteInvitation()} />
         )}
       </div>
       {room.error && (
@@ -177,7 +195,7 @@ function RoomView() {
       ) : (
         <RoomPlayerWorkspace
           characters={heroes}
-          invitation="Invitez les participants depuis Owlbear Rodeo."
+          invitation={siteInvitation()}
         />
       )}
     </main>
@@ -203,98 +221,108 @@ function Settings() {
   return (
     <main className="container space-y-6 py-6">
       <h1 className="font-display text-3xl">Votre salle Owlbear</h1>
-      <p className="text-sm">
-        Partie privée à cette salle Owlbear, absente de l’annuaire du site. Les
-        invitations et les accès sont gérés dans Owlbear.
-      </p>
-      <form
-        className="space-y-3 border border-ink/20 p-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void run(async () => {
-            await roomClient.setRoomTitle(title);
-            setNotice("Nom de la partie enregistré.");
-          });
-        }}
-      >
-        <label className="block font-bold" htmlFor="room-title">
-          Nom de la partie
-        </label>
-        <input
-          id="room-title"
-          className="w-full border border-ink/20 bg-paper p-3"
-          value={title}
-          maxLength={80}
-          required
-          disabled={busy || !room.session}
-          onChange={(event) => setTitle(event.target.value)}
-        />
-        <Button type="submit" disabled={busy || !room.session}>
-          Enregistrer
-        </Button>
-      </form>
-      <section className="space-y-3 border border-ink/20 p-4">
-        <h2 className="font-display text-2xl">
-          Importer un projet .clapStudio
-        </h2>
-        <input
-          aria-label="Importer un projet .clapStudio"
-          type="file"
-          accept=".clapStudio"
-          disabled={busy || !room.session}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file)
+      <SiteLinkPanel />
+      {room.session?.role === "mj" || !room.session ? (
+        <>
+          <p className="text-sm">
+            Partie privée à cette salle Owlbear, absente de l’annuaire du site.
+            Les invitations et les accès sont gérés dans Owlbear.
+          </p>
+          <form
+            className="space-y-3 border border-ink/20 p-4"
+            onSubmit={(event) => {
+              event.preventDefault();
               void run(async () => {
-                const { importProject } = await import("./project");
-                const result = await importProject(
-                  await file.arrayBuffer(),
-                  setNotice,
-                );
-                setNotice(
-                  `Projet « ${result.project.name} » importé. Les héros et cartes sont disponibles dans votre salle.`,
-                );
-                window.dispatchEvent(new Event("focus"));
+                await roomClient.setRoomTitle(title);
+                setNotice("Nom de la partie enregistré.");
               });
-          }}
-        />
-      </section>
-      <section className="space-y-3 border border-ink/20 p-4">
-        <h2 className="font-display text-2xl">Exporter la partie</h2>
-        <p className="text-sm">
-          Le fichier .clapSalle contient l’état de la partie, les héros, les
-          fiches attribuées et leurs ressources. Il se réimporte dans le site
-          CLAP!.
+            }}
+          >
+            <label className="block font-bold" htmlFor="room-title">
+              Nom de la partie
+            </label>
+            <input
+              id="room-title"
+              className="w-full border border-ink/20 bg-paper p-3"
+              value={title}
+              maxLength={80}
+              required
+              disabled={busy || !room.session}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+            <Button type="submit" disabled={busy || !room.session}>
+              Enregistrer
+            </Button>
+          </form>
+          <section className="space-y-3 border border-ink/20 p-4">
+            <h2 className="font-display text-2xl">
+              Importer un projet .clapStudio
+            </h2>
+            <input
+              aria-label="Importer un projet .clapStudio"
+              type="file"
+              accept=".clapStudio"
+              disabled={busy || !room.session}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file)
+                  void run(async () => {
+                    const { importProject } = await import("./project");
+                    const result = await importProject(
+                      await file.arrayBuffer(),
+                      setNotice,
+                    );
+                    setNotice(
+                      `Projet « ${result.project.name} » importé. Les héros et cartes sont disponibles dans votre salle.`,
+                    );
+                    window.dispatchEvent(new Event("focus"));
+                  });
+              }}
+            />
+          </section>
+          <section className="space-y-3 border border-ink/20 p-4">
+            <h2 className="font-display text-2xl">Exporter la partie</h2>
+            <p className="text-sm">
+              Le fichier .clapSalle contient l’état de la partie, les héros, les
+              fiches attribuées et leurs ressources. Il se réimporte dans le
+              site CLAP!.
+            </p>
+            <Button
+              disabled={busy || !room.session}
+              onClick={() =>
+                void run(async () => {
+                  await roomClient.exportArchive();
+                })
+              }
+            >
+              Exporter la salle .clapSalle
+            </Button>
+          </section>
+          <section className="space-y-3 border border-ink/20 p-4">
+            <h2 className="font-display text-2xl">
+              Reprendre une salle sauvegardée
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Fermez la partie courante depuis « Gérer la salle » avant d’en
+              ouvrir une autre. Les sauvegardes restent sur cet appareil.
+            </p>
+            <LocalRoomLibrary
+              busy={busy || Boolean(room.session)}
+              onOpen={(record) =>
+                void run(async () => {
+                  await roomClient.resumeLocalRoom(record.id);
+                })
+              }
+            />
+          </section>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Les outils du MJ seront accessibles après la transmission du rôle
+          depuis le site.
         </p>
-        <Button
-          disabled={busy || !room.session}
-          onClick={() =>
-            void run(async () => {
-              await roomClient.exportArchive();
-            })
-          }
-        >
-          Exporter la salle .clapSalle
-        </Button>
-      </section>
-      <section className="space-y-3 border border-ink/20 p-4">
-        <h2 className="font-display text-2xl">
-          Reprendre une salle sauvegardée
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          Fermez la partie courante depuis « Gérer la salle » avant d’en ouvrir
-          une autre. Les sauvegardes restent sur cet appareil.
-        </p>
-        <LocalRoomLibrary
-          busy={busy || Boolean(room.session)}
-          onOpen={(record) =>
-            void run(async () => {
-              await roomClient.resumeLocalRoom(record.id);
-            })
-          }
-        />
-      </section>
+      )}
       {busy && <p role="status">Traitement en cours…</p>}
       {notice && <p role="status">{notice}</p>}
       {error && (
@@ -306,7 +334,9 @@ function Settings() {
   );
 }
 export function Shell() {
-  const gm = useGM();
+  const gm = useGM(),
+    info = useSyncExternalStore(runtimeSubscribe, runtimeInfo),
+    nativeAdmin = info?.role === "GM";
   useEffect(() => {
     notifyViewReady();
   }, []);
@@ -323,13 +353,13 @@ export function Shell() {
         </Link>
         <span className="text-[10px] text-muted-foreground">Owlbear · 0.2</span>
       </header>
-      {gm && (
+      {(gm || nativeAdmin) && (
         <nav
           className="flex gap-2 border-b border-ink/15 bg-paper px-4 py-2"
           aria-label="Navigation MJ"
         >
           <NavLink to="/app/salle">Salle</NavLink>
-          <NavLink to="/app/studio">Projet</NavLink>
+          {gm && <NavLink to="/app/studio">Projet</NavLink>}
           <NavLink to="/settings">Import / export</NavLink>
         </nav>
       )}
@@ -354,9 +384,9 @@ export function Shell() {
           <Route
             path="/settings"
             element={
-              <GM>
+              <RoomAdmin>
                 <Settings />
-              </GM>
+              </RoomAdmin>
             }
           />
           <Route

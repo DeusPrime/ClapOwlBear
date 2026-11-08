@@ -5,7 +5,7 @@ const base = "/ClapOwlBear/";
 const publicUrl = "https://deusprime.github.io/ClapOwlBear/";
 export default defineConfig(({ command }) => ({
   base,
-  define: { __APP_VERSION__: JSON.stringify("0.2.0") },
+  define: { __APP_VERSION__: JSON.stringify("0.2.1") },
   resolve: {
     alias: { "@owlbear": resolve("src"), "@": resolve("vendor/clap-site/src") },
     dedupe: ["react", "react-dom"],
@@ -26,7 +26,7 @@ export default defineConfig(({ command }) => ({
         const manifest = JSON.parse(
           readFileSync("public/manifest.json", "utf8").replace(/^\uFEFF/, ""),
         );
-        manifest.icon = new URL("icon.svg?v=0.2.0", publicUrl).href;
+        manifest.icon = new URL("icon.svg?v=0.2.1", publicUrl).href;
         manifest.background_url = new URL("background.html", publicUrl).href;
         manifest.action.icon = manifest.icon;
         manifest.action.popover = new URL("index.html", publicUrl).href;

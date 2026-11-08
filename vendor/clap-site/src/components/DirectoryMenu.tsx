@@ -1,1 +1,1 @@
-export { default } from '@owlbear/GameMenu';
+export {default} from '@owlbear/GameMenu';

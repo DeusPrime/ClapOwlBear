@@ -66,7 +66,10 @@ function walk(dir) {
           );
         }
     }
-    writeFileSync(file, content.replace(/^[ \t]+(?=\r?$)/gm, ""));
+    writeFileSync(
+      file,
+      content.replace(/^[ \t]+(?=\r?$)/gm, "").trimEnd() + "\n",
+    );
   }
 }
 walk(join(target, "src"));

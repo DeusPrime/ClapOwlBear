@@ -25,14 +25,15 @@ export class FakeRodeo {
     const self = () => this.players.find((p) => p.id === id)!;
     return {
       roomId: "owlbear-fixture",
-      self: async () => self(),
-      others: async () => this.players.filter((p) => p.id !== id),
-      roomMetadata: async () => this.metadata,
+      self: async () => structuredClone(self()),
+      others: async () =>
+        structuredClone(this.players.filter((p) => p.id !== id)),
+      roomMetadata: async () => structuredClone(this.metadata),
       setRoomMetadata: async (v) => {
-        Object.assign(this.metadata, v);
+        Object.assign(this.metadata, structuredClone(v));
       },
       setPlayerMetadata: async (v) => {
-        Object.assign(self().metadata, v);
+        Object.assign(self().metadata, structuredClone(v));
       },
       send: async (channel, data) => {
         this.sent.push({ sender: id, channel, data });

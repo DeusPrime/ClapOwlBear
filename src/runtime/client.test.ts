@@ -31,7 +31,9 @@ describe("Connexion maintenue en arrière-plan", () => {
         listeners.forEach((fn) => fn());
       },
     };
-    stop = serveRoomClient(engine, channel);
+    stop = serveRoomClient(engine, channel, undefined, () => ({
+      error: "Etat de connexion",
+    }));
     configureRuntime({ background: false, channel });
     const make = () =>
       sharedRoomClient(() => {
@@ -39,6 +41,9 @@ describe("Connexion maintenue en arrière-plan", () => {
       }) as typeof engine;
     const first = make();
     await vi.waitFor(() => expect(first.snapshot().session?.role).toBe("mj"));
+    expect((first.snapshot() as { error?: string }).error).toBe(
+      "Etat de connexion",
+    );
     await first.sendChat("Avant fermeture");
     first.stop();
     expect(engine.stop).not.toHaveBeenCalled();

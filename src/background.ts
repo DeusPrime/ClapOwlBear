@@ -16,25 +16,47 @@ async function start() {
   configureRuntime({ background: true, channel }, service.api);
   const { roomClient } = await import("@/lib/roomClient");
   const archiveKey = `clap-owlbear-archive:${port.roomId}:${self.id}`;
-  let connecting = false;
+  let connecting = false,
+    joinError = "",
+    failures = 0,
+    nextAttempt = 0;
   const remember = async () => {
     const s = roomClient.snapshot().session;
     if (s?.role === "mj" && s.localRoomId)
       localStorage.setItem(archiveKey, s.localRoomId);
   };
-  serveRoomClient(roomClient, channel, remember);
+  serveRoomClient(roomClient, channel, remember, () => ({
+    error: roomClient.snapshot().error || joinError,
+  }));
+  roomClient.subscribe(() => {
+    void remember();
+  });
   // Saved edits originate in the visible UI and are forwarded by the local background bus.
   const session = JSON.parse(
     sessionStorage.getItem("clap-room-session-v1") || "null",
   );
-  if (session?.room === code && session.id === self.id) {
+  if (
+    session?.room === ((await service.descriptor())?.site?.room || code) &&
+    (session.id === self.id ||
+      session.id ===
+        localStorage.getItem(`clap-owlbear-site-member:${self.id}`))
+  ) {
     await roomClient.restore();
   }
   const connect = async () => {
-    if (connecting || service.paused || roomClient.snapshot().session) return;
+    if (
+      connecting ||
+      service.paused ||
+      roomClient.snapshot().session ||
+      Date.now() < nextAttempt
+    )
+      return;
     connecting = true;
     try {
-      if (await service.isHost()) {
+      const link = (await service.descriptor())?.site;
+      if (link) {
+        await roomClient.enter((await port.self()).name, link.room);
+      } else if (await service.isHost()) {
         const localId = localStorage.getItem(archiveKey);
         if (localId) {
           try {
@@ -58,11 +80,20 @@ async function start() {
         await roomClient.enter((await port.self()).name, code);
       }
       await remember();
+      joinError = "";
+      failures = 0;
+      nextAttempt = 0;
+      window.dispatchEvent(new Event("clap-integration-state"));
       if (roomClient.snapshot().session?.role === "mj") {
         const { migrateLegacyProject } = await import("./project");
         await migrateLegacyProject(port.roomId, self.id);
       }
     } catch (error) {
+      joinError =
+        error instanceof Error ? error.message : "Connexion impossible.";
+      nextAttempt =
+        Date.now() + Math.min(30000, 2000 * 2 ** Math.min(failures++, 4));
+      window.dispatchEvent(new Event("clap-integration-state"));
       console.warn(
         "CLAP connection:",
         error instanceof Error ? error.message : error,

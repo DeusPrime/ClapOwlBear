@@ -1,4 +1,4 @@
-﻿# CLAP! pour Owlbear Rodeo — 0.2
+# CLAP! pour Owlbear Rodeo — 0.2.1
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
@@ -27,9 +27,18 @@ La fermeture du panneau ne ferme pas la partie : la page d’arrière-plan conse
 
 Les salles hébergées par cette extension **ne sont jamais inscrites dans l’annuaire du site** : aucun appel à l’API de création ou de liste du site. La présence et la signalisation passent par Owlbear ; les données de jeu utilisent les connexions WebRTC du moteur CLAP!.
 
-Cette version héberge une partie dans Owlbear. Le passage vers une partie sur le site se fait par `.clapSalle` ; elle n’établit pas de liaison en direct avec une salle déjà ouverte sur le site.
+Deux modes sont disponibles :
 
-Invitations et contrôle d’accès restent ceux d’Owlbear. Le MJ peut exclure un participant de CLAP!. Pour transmettre la partie, le successeur doit d’abord avoir le rôle MJ dans Owlbear ; l’interface ne propose que les successeurs autorisés. La partie CLAP! conserve un seul MJ actif, même avec plusieurs utilisateurs ayant le rôle GM Owlbear.
+1. **Partie locale Owlbear** : connexion automatique, sans inscription au serveur du site.
+2. **Salle du site liée** : le MJ du site ouvre Gérer la salle → Relier Owlbear Rodeo et génère un code de liaison. Dans les réglages MJ de l’extension, coller ce code dans « Salle du site CLAP! ». Les joueurs Owlbear rejoignent automatiquement la même partie que les utilisateurs du site. La salle liée est masquée dans l’annuaire public.
+
+Le code donne uniquement accès comme joueur. Pour utiliser les outils MJ depuis Owlbear, le MJ actuel transmet explicitement ce rôle au participant identifié « Owlbear » dans le menu existant du site. Les identités des invités Owlbear sont distinctes et privées à leur navigateur ; aucun compte ou cookie du site n’est transmis. Régénérer le code révoque le précédent.
+
+**Activation de la liaison** : installer aussi la mise à jour du site et de son API. Le serveur doit annoncer `features.owlbearRooms: 1` sur `/api/health` ; l’extension refuse une ancienne API avant de fermer la partie Owlbear courante. Le dépôt du site prépare `release/clap-api-serveur.zip` et `release/clap-site.zip` via `npm run package:api`. Le réglage facultatif `OWLBEAR_ORIGIN` vaut par défaut `https://deusprime.github.io`. L’accès externe reste limité au protocole des salles ; comptes et administration conservent leur politique d’origine.
+
+La configuration de liaison est lue depuis les métadonnées du MJ Owlbear authentifié, et non depuis les seules métadonnées partagées modifiables par les joueurs. Les codes d’entrée ne donnent aucun droit MJ et ne sont pas inclus dans les archives de partie.
+
+Pour les parties locales, invitations et contrôle d’accès restent ceux d’Owlbear. Pour une salle liée, les contrôles du site sont conservés. Le MJ peut exclure un participant de CLAP!. Pour transmettre une partie locale, le successeur doit d’abord avoir le rôle MJ dans Owlbear ; l’interface ne propose que les successeurs autorisés. La partie CLAP! conserve un seul MJ actif, même avec plusieurs utilisateurs ayant le rôle GM Owlbear.
 
 ## Développement
 
@@ -66,6 +75,6 @@ Le script copie uniquement le code client et les ressources publiques, applique 
 
 Les tests utilisent le vrai moteur et trois participants simulés : attribution, inventaire, messages publics, confidentialité des murmures et fiches, demandes de jets, export et réimport de la salle. Des tests distincts couvrent les rôles, la signalisation, la fermeture/réouverture du panneau et les projets de plus de 32 Mo.
 
-Ces tests simulent le transport RTC. Une validation dans une vraie salle Owlbear avec plusieurs navigateurs reste nécessaire ; aucun test réel de connexion sur des réseaux distincts n’a encore été effectué. La configuration intégrée utilise STUN et n’ajoute pas de relais TURN : certains réseaux peuvent empêcher une connexion WebRTC directe. Les quotas de stockage et la mémoire du navigateur restent applicables.
+Ces tests simulent le transport RTC. Une validation dans une vraie salle Owlbear avec plusieurs navigateurs reste nécessaire ; aucun test réel de connexion sur des réseaux distincts n’a encore été effectué. Les parties locales utilisent STUN et n’ajoutent pas de relais TURN : certains réseaux peuvent empêcher une connexion WebRTC directe. Une salle liée reprend les serveurs ICE/TURN fournis par l’API du site. Les quotas de stockage et la mémoire du navigateur restent applicables.
 
 Le workflow GitHub Actions compile, teste, vérifie les fichiers et publie GitHub Pages à chaque push sur `main`.

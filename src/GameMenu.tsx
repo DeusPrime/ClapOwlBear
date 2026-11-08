@@ -70,6 +70,15 @@ export default function GameMenu({
               {title}
             </Link>
           ))}
+          {!gm && info?.role === "GM" && (
+            <Link
+              to="/settings"
+              onClick={() => setOpen(false)}
+              className="flex min-h-11 items-center rounded border border-ink/15 px-3 py-2"
+            >
+              Connexion de salle
+            </Link>
+          )}
         </nav>
         {gm && (
           <DirectoryPicker

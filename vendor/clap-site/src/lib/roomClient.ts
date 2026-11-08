@@ -1,4 +1,4 @@
-import { callRoomApi, sharedRoomClient } from '@owlbear/runtime/client';
+import {callRoomApi,sharedRoomClient} from '@owlbear/runtime/client';
 import { localizeText } from '@/i18n/localize';
 import { selectDirectory, loadDirectories } from "./directories";
 import { ensureRoomProject } from './roomProject';
@@ -194,7 +194,7 @@ export class RoomClient {
     const blob = await exportRoomArchive(record);
     await this.persistence.catch(() => {});
     if (this.archive?.id === record.id) { this.archive = { ...this.archive, heroes: record.heroes, resources: record.resources }; this.persist(); await this.persistence.catch(() => {}); }
-    return {blob, name: record.title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_') + '.clapSalle'};
+    return {blob,name:record.title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_') + '.clapSalle'};
   }
 
   private save(session: RoomSession) {
@@ -203,9 +203,7 @@ export class RoomClient {
     rememberRoomNickname(session.room, session.name);
     this.update({ session });
   }
-  private async api<T>(path: string, body: unknown, session = this.state.session): Promise<T> {
-    return callRoomApi<T>(path, body, session);
-  }
+  private async api<T>(path:string,body:unknown,session=this.state.session):Promise<T>{return callRoomApi<T>(path,body,session);}
   list() { return this.api<{ rooms: RoomListing[] }>("/list", { identityToken: playerIdentityToken() }, null); }
   async resumeLocalRoom(id: string) {
     if (this.state.session?.role === 'mj' && this.state.session.localRoomId === id) return;
@@ -332,7 +330,12 @@ export class RoomClient {
     this.update({ availableHeroes: [], roomHeroes: [], heroProposals: [], pendingHeroProposal: undefined, roomInfo: null, sheetResources: {}, connected: [], members: [], sheets: {}, messages: [], requests: [], hideRolls: false, syncing: false });
     this.proposal = undefined;
   }
-  async setRoomTitle(title: string) { await this.api('/title', {title}); await this.refreshRoom(); this.persist(); }
+  async setRoomTitle(title:string){await this.api('/title',{title});await this.refreshRoom();this.persist();}
+  async linkSiteRoom(link:string){
+    const config=await this.api<{room:string}>('/integration/validate',{link});const name=this.state.session?.name||'MJ Owlbear';
+    if(this.state.session)await this.leave();await this.api('/integration/link',{link},null);await this.enter(name,config.room);
+  }
+  async unlinkSiteRoom(){const name=this.state.session?.name||'MJ Owlbear';if(this.state.session)await this.leave();await this.api('/integration/unlink',{},null);await this.enter(name,undefined,undefined,{title:'Salle CLAP!'});}
   async sendChat(text: string, target?: string) {
     await this.command({ type: 'chat', id: crypto.randomUUID(), text, ...(target ? { target } : {}) });
   }
@@ -560,6 +563,7 @@ export class RoomClient {
     if (id) rememberRoomSettings(id, password);
     await this.refreshRoom();
   }
+  async createOwlbearInvite() { return this.api<{ code: string }>('/owlbear-invite', {}); }
   async kickPlayer(target: string) {
     await this.api('/kick', { target });
     if (this.peers.has(target)) this.closePeer(target);
