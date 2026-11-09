@@ -1,4 +1,4 @@
-import {sheetSignature} from '@owlbear/runtime/sheet-signature';
+import {sheetSignature,contentDigest} from '@owlbear/runtime/sheet-signature';
 import {callRoomApi,sharedRoomClient,createRoomPeer} from '@owlbear/runtime/client';
 import type { RollVisual } from "./rollVisual";
 import { localizeText } from '@/i18n/localize';
@@ -20,7 +20,7 @@ import { saveLocalRoom, loadLocalRoom, captureRoomLibrary, exportRoomArchive, ty
 
 const API = (import.meta.env.VITE_ROOM_API_URL || "/api/rooms").replace(/\/$/, "");
 const STORAGE = "clap-room-session-v1";
-type Peer = { pc: RTCPeerConnection; transport?: RoomTransport; connection: string; instance: string; started: number; sheet: string; assignment?: string; resources?: Map<string, string> };
+type Peer = { pc: RTCPeerConnection; transport?: RoomTransport; connection: string; instance: string; started: number; sheet: string; lastMessage?: number; sendingSheet?: boolean; resumeChecked?: boolean; resumeBusy?: boolean; resumeTimer?: ReturnType<typeof setTimeout>; resumeSummary?: {id:string;signature:string;generation?:string;resources:Map<string,string>}; assignment?: string; resources?: Map<string, string> };
 type Snapshot = {
   sheetTransfers?: string[];
   projectName?: string;
@@ -48,6 +48,7 @@ export class RoomClient {
   private publicHeroes = new Map<string, { heroName: string; heroConcept: string }>();
   private archive?: RoomArchive;
   private persistence = Promise.resolve();
+  private queuedSave?: {record:RoomArchive};
   private pendingCommands = new Map<string, { peerId: string; resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private handoff?: RoomArchive;
   private commandLimits = new Map<string, { count: number; reset: number }>();
@@ -101,7 +102,11 @@ export class RoomClient {
       sheetResources: Object.fromEntries(Object.entries({ ...this.archive.sheetResources, ...this.state.sheetResources }).slice(-16)) as RoomArchive['sheetResources'] };
     this.archive = record;
     this.update({ projectName: record.projectName, savedSheets: record.sheets, savedSheetResources: record.sheetResources });
-    this.persistence = this.persistence.catch(() => {}).then(() => saveLocalRoom(record));
+    if (this.queuedSave) this.queuedSave.record = record;
+    else {
+      const job = {record}; this.queuedSave = job;
+      this.persistence = this.persistence.catch(() => {}).then(() => { this.queuedSave = undefined; return saveLocalRoom(job.record); });
+    }
     void this.persistence.catch(() => this.update({ error: 'La sauvegarde locale a échoué. Exporte ta salle avant de fermer.' }));
   }
   setPrivateRefs(privateRefs: PrivateRoomRef[]) {
@@ -294,7 +299,14 @@ export class RoomClient {
     this.persist();
     for (const [id, peer] of this.peers) {
       const member = this.state.members.find(value => value.id === id);
-      if (member) peer.transport?.send(this.gameState(member));
+      if (member) {
+        const state=this.gameState(member);
+        if((peer.transport?.channel as RTCDataChannel & {prioritySupported?:boolean})?.prioritySupported){
+          for(const message of state.messages)if(message.id>(peer.lastMessage??this.game.sequence))peer.transport?.send({kind:'game-message',message});
+          peer.lastMessage=this.game.sequence;
+        }
+        peer.transport?.send(state);
+      }
     }
   }
   private async command(command: GameCommand) {
@@ -527,6 +539,7 @@ export class RoomClient {
   }
   private sendAssignment(id: string, peer: Peer) {
     const message = this.assignments.get(id);
+    if ((peer.transport?.channel as RTCDataChannel & {prioritySupported?:boolean})?.prioritySupported && !peer.resumeChecked) return;
     if (message && peer.assignment !== message.assignmentId && peer.transport?.send(message)) peer.assignment = message.assignmentId;
   }
   private async receiveAssignment(sender: string, message: Extract<RoomMessage, { kind?: 'assign-sheet' }>) {
@@ -544,6 +557,7 @@ export class RoomClient {
       if (this.state.session?.id !== session.id || this.state.session.gameGeneration !== message.roomGeneration || !this.state.members.some(member => member.id === sender && member.role === 'mj')) return;
       this.save({ ...this.state.session, characterId: character.id, receivedAssignment: message.assignmentId, roomDirectoryId: project.id });
       selectDirectory(project.id);
+      this.peers.forEach(peer => {peer.resumeChecked=true;peer.resumeSummary=undefined;});
       const assignedCharacter=await getCharacter(character.id)||character;const assignedSignature=sheetSignature(roomCharacterSchema.parse({...assignedCharacter,portrait:assignedCharacter.portrait||undefined}));this.peers.forEach(peer => { peer.sheet = message.resources?.length ? '' : assignedSignature; });
       acknowledge();
       window.dispatchEvent(new Event('clap-room-character-assigned'));
@@ -598,6 +612,7 @@ export class RoomClient {
     const sheets = { ...this.state.sheets }; delete sheets[id];
     const sheetResources = { ...this.state.sheetResources }; delete sheetResources[id];
     for (const [operationId, operation] of this.resourceOperations) if (operation.playerId === id) { clearTimeout(operation.timer); operation.reject(new Error("Joueur déconnecté.")); this.resourceOperations.delete(operationId); }
+    clearTimeout(peer?.resumeTimer);
     this.update({ sheetResources, sheets, connected: this.state.connected.filter(key => key !== id) });
   }
   private newPeer(member: RoomMember, connection: string) {
@@ -612,12 +627,17 @@ export class RoomClient {
       }, () => this.state.session?.gameGeneration);
       channel.onopen = () => {
         if (this.peers.get(member.id) !== peer) return;
+        peer.lastMessage=this.game.sequence;
         this.update({ connected: [...new Set([...this.state.connected, member.id])] });
         void this.sendSheet(peer);
         this.sendAssignment(member.id, peer);
-        if (this.state.session?.role === 'mj' && !this.assignments.has(member.id)) {
-          const saved = this.archive?.sheets[member.id];
-          if (saved) void this.assignCharacter(member.id, saved.id).catch(cause => this.update({ error: cause instanceof Error ? cause.message : 'Reprise du héros impossible.' }));
+        if (this.state.session?.role === 'mj') {
+          if ((channel as RTCDataChannel & {prioritySupported?:boolean}).prioritySupported) {
+            peer.resumeTimer = setTimeout(() => this.resumeAssignment(member.id, peer), 2500);
+          } else if (!this.assignments.has(member.id)) {
+            const saved = this.archive?.sheets[member.id];
+            if (saved) void this.assignCharacter(member.id, saved.id).catch(cause => this.update({ error: cause instanceof Error ? cause.message : 'Reprise du héros impossible.' }));
+          }
         }
         if (this.state.session?.role === 'player' && this.proposal) peer.transport?.send(this.proposal);
         if (this.state.session?.role === 'mj') peer.transport?.send(this.gameState(member));
@@ -880,9 +900,40 @@ export class RoomClient {
     }
     if (!this.stopped && generation === this.generation) this.timer = setTimeout(() => void this.tick(generation), 3000);
   }
+  private resumeAssignment(sender:string, peer:Peer) {
+    if (this.peers.get(sender)!==peer || this.state.session?.role!=='mj') return;
+    clearTimeout(peer.resumeTimer);peer.resumeChecked=true;
+    if (this.assignments.has(sender)) {this.sendAssignment(sender,peer);return;}
+    const saved=this.archive?.sheets[sender];
+    if(saved)void this.assignCharacter(sender,saved.id).catch(cause=>this.update({error:cause instanceof Error?cause.message:'Reprise impossible.'}));
+  }
+  private async verifySheetSummary(sender:string, peer:Peer, message:Extract<RoomMessage,{kind:'sheet-summary'}>) {
+    if(this.state.session?.role!=='mj'||!(peer.transport?.channel as RTCDataChannel & {prioritySupported?:boolean})?.prioritySupported)return;
+    clearTimeout(peer.resumeTimer);
+    const session=this.state.session, saved=this.archive?.sheets[sender];
+    const matches=Boolean(saved && saved.id===message.characterId && await contentDigest(saved)===message.digest);
+    if(this.peers.get(sender)!==peer||this.state.session!==session)return;
+    if(!matches && saved){this.resumeAssignment(sender,peer);return;}
+    const resources=((saved ? this.archive?.sheetResources[sender] || [] : []) as BundledResource[]).filter(resource=>saved?.linkedResources.some(link=>link.type===resource.type&&link.id===resource.item.id));
+    const cached=new Map<string,string>();
+    for(const resource of resources)cached.set(saved!.id+':'+resource.type+':'+resource.item.id,await contentDigest(transferableRoomResource(resource)));
+    if(this.peers.get(sender)!==peer||this.state.session!==session)return;
+    if(this.archive?.sheets[sender]!==saved){this.resumeAssignment(sender,peer);return;}
+    peer.resumeChecked=true;
+    if(matches && saved){
+      this.approvedSheetIds.set(sender,saved.id);this.assignments.delete(sender);
+      this.update({sheets:{...this.state.sheets,[sender]:saved as Character},sheetResources:{...this.state.sheetResources,[sender]:resources}});
+    }
+    peer.transport?.send({kind:'sheet-sync',id:message.id,accepted:matches,needed:message.resources.filter(item=>cached.get(item.key)!==item.digest).map(item=>item.key)});
+    if(matches && saved){
+      for(const resource of resources){const key=saved.id+':'+resource.type+':'+resource.item.id;if(!message.resources.some(item=>item.key===key))peer.transport?.send({kind:'sheet-resource',characterId:saved.id,resource:transferableRoomResource(resource)});}
+      this.publishGame();
+    }
+  }
   private async sendSheet(peer: Peer) {
     const session = this.state.session;
-    if (session?.role !== "player" || peer.transport?.channel.readyState !== "open") return;
+    if (session?.role !== "player" || peer.transport?.channel.readyState !== "open" || peer.sendingSheet) return;
+    peer.sendingSheet=true;
     try {
       const character = session.characterId ? await getCharacter(session.characterId) : undefined;
       if (this.state.session !== session) return;
@@ -890,6 +941,20 @@ export class RoomClient {
       if (parsed && !parsed.success) { this.update({ error: "Cette fiche contient un champ ou un portrait trop volumineux pour le partage." }); return; }
       const message: RoomMessage = { kind: "sheet", character: parsed?.success ? parsed.data : null };
       const json = sheetSignature(message.character);
+      if ((peer.transport.channel as RTCDataChannel & {prioritySupported?:boolean}).prioritySupported && !peer.resumeChecked) {
+        if (peer.resumeBusy || (peer.resumeSummary?.signature===json && peer.resumeSummary.generation===session.gameGeneration)) return;
+        peer.resumeBusy=true;
+        try {
+          const resources=character ? await (await import('./resourceBundle')).loadLinkedBundledResources(character) : [];
+          const signatures=new Map<string,string>();
+          for(const resource of resources)signatures.set(character!.id+':'+resource.type+':'+resource.item.id,await contentDigest(transferableRoomResource(resource)));
+          const digest=await contentDigest(message.character);
+          if(this.state.session!==session||peer.transport?.channel.readyState!=='open')return;
+          const id=crypto.randomUUID();peer.resumeSummary={id,signature:json,generation:session.gameGeneration,resources:signatures};
+          if(!peer.transport.send({kind:'sheet-summary',id,characterId:character?.id||null,digest:character?digest:null,resources:[...signatures].map(([key,digest])=>({key,digest}))}))peer.resumeSummary=undefined;
+        } finally {peer.resumeBusy=false;}
+        return;
+      }
       if (json !== peer.sheet) {
         if (peer.transport.send(message)) peer.sheet = json;
         else this.update({ error: "La fiche n’a pas pu être transmise. Réduis la taille de son portrait." });
@@ -902,11 +967,12 @@ export class RoomClient {
         for (const resource of resources) {
           const message: RoomMessage = { kind: 'sheet-resource', characterId: character.id, resource: transferableRoomResource(resource) };
           const key = character.id + ':' + resource.type + ':' + resource.item.id;
-          const json = JSON.stringify(message);
+          const json = await contentDigest(message.resource);
           if (peer.resources.get(key) !== json) { if (peer.transport.send(message)) peer.resources.set(key, json); break; }
         }
       }
     } catch { this.update({ error: "Impossible de lire la fiche enregistrée sur cet appareil." }); }
+    finally {peer.sendingSheet=false;}
   }
   private receive(sender: string, message: RoomMessage) {
     const session = this.state.session;
@@ -914,6 +980,20 @@ export class RoomClient {
     const source = this.state.members.find(value => value.id === sender);
     if (!source) return;
     if (message.kind !== "game-state" && session.gameGeneration && message.roomGeneration !== session.gameGeneration) return;
+    if(message.kind==='game-message' && session.role==='player' && source.role==='mj') {
+      if(!this.state.messages.some(item=>item.id===message.message.id))this.update({messages:[...this.state.messages,message.message].sort((a,b)=>a.id-b.id).slice(-3200),requests:message.message.requestId?this.state.requests.filter(request=>request.id!==message.message.requestId):this.state.requests});
+      return;
+    }
+    if(message.kind==='sheet-summary' && source.role==='player') {
+      const peer=this.peers.get(sender);if(peer)void this.verifySheetSummary(sender,peer,message).catch(()=>this.resumeAssignment(sender,peer));return;
+    }
+    if(message.kind==='sheet-sync' && session.role==='player' && source.role==='mj') {
+      const peer=this.peers.get(sender), summary=peer?.resumeSummary;
+      if(!peer || !summary || summary.id!==message.id)return;
+      peer.resumeChecked=true;
+      if(message.accepted){peer.sheet=summary.signature;peer.resources=new Map([...summary.resources].filter(([key])=>!message.needed.includes(key)));}
+      peer.resumeSummary=undefined;void this.sendSheet(peer);return;
+    }
     if (message.kind === 'hero-recover') {
       if (session.role !== 'mj' || source.role !== 'player') return;
       if (this.state.heroProposals.some(proposal => proposal.id === message.id)) return;
@@ -975,7 +1055,9 @@ export class RoomClient {
       if (session.role === 'player' && source.role === 'mj') {
         this.update({ availableHeroes: (message.roomHeroes || []) as Snapshot["availableHeroes"] });
         if (message.heroes) this.publicHeroes = new Map(message.heroes.map(hero => [hero.id, { heroName: hero.heroName, heroConcept: hero.heroConcept }]));
-        this.update({ owlbearUrl: message.owlbearUrl, messages: message.messages, requests: message.requests.filter(request => !this.resolvedRequests.has(request.id)),
+        const latestMessage=message.messages.reduce((max,value)=>Math.max(max,value.id),0);
+        const messages = session.gameGeneration===message.roomGeneration ? [...message.messages,...this.state.messages.filter(item=>item.id>latestMessage)].sort((a,b)=>a.id-b.id).slice(-3200) : message.messages;
+        this.update({ owlbearUrl: message.owlbearUrl, messages, requests: message.requests.filter(request => !this.resolvedRequests.has(request.id)),
           members: this.state.members.map(member => ({ ...member, ...this.publicHeroes.get(member.id) })) });
       }
       return;
@@ -1000,6 +1082,21 @@ export class RoomClient {
     if (message.kind === 'resource-linked') {
       const operation = this.resourceOperations.get(message.operationId);
       if (operation?.playerId === sender && session.role === 'mj') { clearTimeout(operation.timer); this.resourceOperations.delete(message.operationId); if (message.error) operation.reject(new Error(message.error)); else operation.resolve(); }
+      return;
+    }
+    if (message.kind === 'sheet-resource' && session.role==='player' && source.role==='mj') {
+      this.resourceQueue=this.resourceQueue.then(async()=>{
+        const own=this.state.session,peer=this.peers.get(sender);
+        if(!own||own.characterId!==message.characterId)return;
+        const hero=await getCharacter(message.characterId);
+        if(!hero||!hero.linkedResources.some(link=>link.type===message.resource.type&&link.id===message.resource.item.id))return;
+        const {loadLinkedBundledResources,upsertBundledResource}=await import('./resourceBundle');
+        if((await loadLinkedBundledResources(hero)).some(resource=>resource.type===message.resource.type&&resource.item.id===message.resource.item.id))return;
+        if(this.state.session?.id!==own.id||this.state.session.characterId!==own.characterId||this.state.session.gameGeneration!==own.gameGeneration||this.peers.get(sender)!==peer)return;
+        await upsertBundledResource({type:message.resource.type,item:{...message.resource.item,directoryId:hero.directoryId}} as BundledResource);
+        if(peer){peer.resources??=new Map();peer.resources.set(hero.id+':'+message.resource.type+':'+message.resource.item.id,await contentDigest(message.resource));}
+        window.dispatchEvent(new CustomEvent('clap-room-character-assigned',{detail:{character:hero}}));
+      }).catch(()=>this.update({error:'Impossible de restaurer une carte liée.'}));
       return;
     }
     if (message.kind === 'sheet-resource') {

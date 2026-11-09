@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import JSZip from "jszip";
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { FakeRodeo, MemoryPeer } from "../test/fakes";
+import { FakeRodeo, MemoryPeer, MemoryChannel } from "../test/fakes";
 import { OwlbearRoomService } from "./rodeo-service";
 const clients: any[] = [],
   services: OwlbearRoomService[] = [];
@@ -276,3 +276,73 @@ it('keeps an approved player proposal in the room library and the native room in
     expect(saved?.sheets.alice.nom).toBe(source.nom);
   });
 }, 20000);
+it.each(['identical','missing-card','missing-player-card','different-sheet'] as const)('resumes with content hashes instead of reassigning identical cached data (%s)', async scenario => {
+  const prototype=MemoryChannel.prototype as any;
+  Object.defineProperty(prototype,'prioritySupported',{configurable:true,value:true});
+  prototype.sendPriority=prototype.send;
+  const frames:string[]=[];
+  const original=prototype.send;
+  const spy=vi.spyOn(prototype,'send').mockImplementation(function(this:any,value:unknown){frames.push(String(value));return original.call(this,value);});
+  prototype.sendPriority=prototype.send;
+  try {
+    vi.stubGlobal('RTCPeerConnection',MemoryPeer);
+    const world=new FakeRodeo();world.add('host','GM');world.add('alice','PLAYER');
+    const hs=new OwlbearRoomService(world.port('host'),'F1F2F3F4F5F6'),ps=new OwlbearRoomService(world.port('alice'),'F1F2F3F4F5F6');
+    services.push(hs,ps);await hs.start();await ps.start();
+    const host=await engine(hs,'host'),player=await engine(ps,'alice','F1F2F3F4F5F6');
+    await vi.waitFor(()=>expect(host.snapshot().connected).toContain('alice'),{timeout:12000});
+    const {blankCharacter,getCharacter,upsertCharacter}=await import('@/lib/characters');
+    const {blankPower}=await import('@/lib/powers');
+    const powers=[{...blankPower(),titre:'Cached card one'},{...blankPower(),titre:'Cached card two'}];
+    const hero=await host.addRoomHero({...blankCharacter(),nom:'Cached hero',notes:'Stored notes',linkedResources:powers.map(power=>({type:'power',id:power.id}))},powers.map(item=>({type:'power',item})));
+    await host.assignCharacter('alice',hero.id);
+    await vi.waitFor(()=>expect(host.snapshot().sheetResources.alice).toHaveLength(2),{timeout:12000});
+    await vi.waitFor(()=>expect(host.pendingAssignmentIds()).toEqual([]));
+    (host as any).closePeer('alice');(player as any).closePeer('host');
+    if(scenario==='missing-card')(host as any).archive.sheetResources.alice=(host as any).archive.sheetResources.alice.slice(0,1);
+    if(scenario==='missing-player-card'){const local=await getCharacter(hero.id);await (await import('@/lib/powers')).deletePower(local!.linkedResources[0].id);}
+    if(scenario==='different-sheet'){window.removeEventListener('clap-character-saved',(host as any).characterSaved);const local=await getCharacter(hero.id);await upsertCharacter({...local!,notes:'Unconfirmed offline edit'});}
+    frames.length=0;
+    const assign=vi.spyOn(host,'assignCharacter');
+    await vi.waitFor(()=>expect(host.snapshot().connected).toContain('alice'),{timeout:12000});
+    if(scenario==='different-sheet') {
+      await vi.waitFor(()=>expect(assign).toHaveBeenCalled(),{timeout:6000});
+      await vi.waitFor(async()=>expect((await getCharacter(hero.id))?.notes).toBe('Stored notes'));
+    } else {
+      await vi.waitFor(()=>expect(host.snapshot().sheets.alice?.id).toBe(hero.id),{timeout:6000});
+      await vi.waitFor(()=>expect(host.snapshot().sheetResources.alice).toHaveLength(2),{timeout:6000});
+      if(scenario==='missing-player-card')await vi.waitFor(async()=>expect(await (await import('@/lib/resourceBundle')).loadLinkedBundledResources((await getCharacter(hero.id))!)).toHaveLength(2),{timeout:6000});
+      expect(assign).not.toHaveBeenCalled();
+      expect(frames.some(frame=>frame.includes('"kind":"assign-sheet"'))).toBe(false);
+      expect(frames.some(frame=>frame.includes('"kind":"sheet"'))).toBe(false);
+      const sentCards=frames.filter(frame=>frame.includes('"kind":"sheet-resource"'));
+      expect(sentCards).toHaveLength(scenario==='missing-card'||scenario==='missing-player-card'?1:0);
+    }
+  } finally {spy.mockRestore();delete prototype.prioritySupported;delete prototype.sendPriority;}
+},25000);
+it('delivers a live roll ahead of blocked history and retains it when an older history arrives', async () => {
+  const prototype=MemoryChannel.prototype as any;
+  Object.defineProperty(prototype,'prioritySupported',{configurable:true,value:true});prototype.sendPriority=prototype.send;
+  let spy:ReturnType<typeof vi.spyOn>|undefined;
+  try {
+    vi.stubGlobal('RTCPeerConnection',MemoryPeer);
+    const world=new FakeRodeo();world.add('host','GM');world.add('alice','PLAYER');
+    const hs=new OwlbearRoomService(world.port('host'),'A0B0C0D0E0F0'),ps=new OwlbearRoomService(world.port('alice'),'A0B0C0D0E0F0');
+    services.push(hs,ps);await hs.start();await ps.start();
+    const host=await engine(hs,'host'),player=await engine(ps,'alice','A0B0C0D0E0F0');
+    await vi.waitFor(()=>expect(host.snapshot().connected).toContain('alice'),{timeout:12000});
+    await vi.waitFor(()=>expect((player as any).peers.get('host')?.resumeChecked).toBe(true));
+    const original=prototype.send;
+    const blocked:string[]=[];
+    spy=vi.spyOn(prototype,'send').mockImplementation(function(this:any,value:unknown){const frame=String(value);if(frame.startsWith('size:')||frame.startsWith('data:')){blocked.push(frame);return;}return original.call(this,value);});prototype.sendPriority=prototype.send;
+    const history=Array.from({length:30},(_,id)=>({id:id+1,sender:'host',name:'MJ',role:'mj',kind:'chat',text:'history '.repeat(100),created:1}));
+    (host as any).game={...(host as any).game,messages:history,sequence:30};
+    (host as any).publishGame();
+    await host.broadcastRoll('Priority roll','Result: 4',{public:true});
+    await vi.waitFor(()=>expect(player.snapshot().messages.some(message=>message.kind==='roll'&&message.text.includes('Priority roll'))).toBe(true),{timeout:2000});
+    expect(blocked.length).toBeGreaterThan(0);
+    (player as any).receive('host',{kind:'game-state',messages:history,requests:[],roomGeneration:player.snapshot().session?.gameGeneration});
+    expect(player.snapshot().messages.some(message=>message.kind==='roll'&&message.text.includes('Priority roll'))).toBe(true);
+    expect(player.snapshot().messages.filter(message=>message.kind==='roll')).toHaveLength(1);
+  } finally {spy?.mockRestore();delete prototype.prioritySupported;delete prototype.sendPriority;}
+},15000);

@@ -63,3 +63,39 @@ it('batches synchronous resource frames without a header-only network round trip
     await expect.poll(()=>received.length,{timeout:5000}).toBe(frames.length);expect(received).toEqual(frames);expect(new Set(packets.filter(p=>p.id==='h'&&p.type==='data').map(p=>p.seq)).size).toBe(1);
   } finally {a.stop();b.stop();}
 });
+it('delivers roll commands and confirmations while a bulk transfer is awaiting acknowledgement', async () => {
+  const { RoomTransport } = await import('@/lib/roomTransport');
+  const listeners = new Map<string,(event:any)=>void>();
+  const held: (()=>void)[] = [];
+  let hold = true;
+  const wire = (id:string) => ({ connectionId:id, subscribe:(fn:any)=>{listeners.set(id,fn);return()=>{};}, send:async(data:any)=>{
+    for(const [other,fn] of listeners) if(other!==id){const deliver=()=>fn({connectionId:id,data:structuredClone(data)});if(hold&&data.type==='data'&&!data.lane)held.push(deliver);else queueMicrotask(deliver);}
+  }});
+  const a=createNativePeerBridge(wire('p')),b=createNativePeerBridge(wire('h'));
+  const player=a.create(),host=b.create(),outgoing=player.createDataChannel('room');
+  let incoming:RTCDataChannel|undefined;host.ondatachannel=e=>{incoming=e.channel;};
+  try {
+    await player.setLocalDescription();await host.setRemoteDescription(player.localDescription!);await host.setLocalDescription();await player.setRemoteDescription(host.localDescription!);
+    await expect.poll(()=>incoming?.readyState).toBe('open');
+    const onPlayer:any[]=[],onHost:any[]=[];
+    const pt=new RoomTransport(outgoing,message=>onPlayer.push(message));
+    const ht=new RoomTransport(incoming!,message=>onHost.push(message));
+    const transfer={kind:'game-state' as const,messages:Array.from({length:20},(_,id)=>({id,sender:'h',name:'MJ',role:'mj' as const,kind:'chat' as const,text:'x'.repeat(1000),created:1})),requests:[]};
+    ht.send(transfer);pt.send(transfer);
+    await expect.poll(()=>held.length).toBeGreaterThan(0);
+    const id=crypto.randomUUID();
+    pt.send({kind:'game-command',command:{type:'roll',id,label:'Force',summary:'Result: 4'}} as any);
+    await expect.poll(()=>onHost.some(message=>message.kind==='game-command'),{timeout:1500}).toBe(true);
+    ht.send({kind:'game-result',id});
+    await expect.poll(()=>onPlayer.some(message=>message.kind==='game-result'),{timeout:1500}).toBe(true);
+    const summary={kind:'sheet-summary' as const,id:crypto.randomUUID(),characterId:null,digest:null,resources:Array.from({length:100},(_,i)=>({key:'card:'+i+':'+ 'x'.repeat(100),digest:'a'.repeat(64)}))};
+    expect(JSON.stringify(summary).length).toBeGreaterThan(8000);
+    pt.send(summary);
+    await expect.poll(()=>onHost.some(message=>message.kind==='sheet-summary'),{timeout:1500}).toBe(true);
+    expect(onPlayer.some(message=>message.kind==='game-state')).toBe(false);
+    expect(onHost.some(message=>message.kind==='game-state')).toBe(false);
+    hold=false;held.splice(0).forEach(deliver=>deliver());
+    await expect.poll(()=>onPlayer.some(message=>message.kind==='game-state'),{timeout:3000}).toBe(true);
+    expect(a.diagnostics().lastError).toBe('');expect(b.diagnostics().lastError).toBe('');
+  } finally {a.stop();b.stop();}
+},10000);

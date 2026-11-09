@@ -51,6 +51,9 @@ export const publicRollSchema = z.object({
 });
 export type PublicRoll = z.infer<typeof publicRollSchema>;
 export const roomMessageSchema = z.discriminatedUnion("kind", [
+  z.object({ ...gameScope, kind: z.literal('game-message'), message: chatEntrySchema }),
+  z.object({ ...gameScope, kind: z.literal('sheet-summary'), id: z.string().uuid(), characterId: z.string().max(100).nullable(), digest: z.string().regex(/^[a-f0-9]{64}$/).nullable(), resources: z.array(z.object({ key: z.string().max(250), digest: z.string().regex(/^[a-f0-9]{64}$/) })).max(200) }),
+  z.object({ ...gameScope, kind: z.literal('sheet-sync'), id: z.string().uuid(), accepted: z.boolean(), needed: z.array(z.string().max(250)).max(200) }),
   z.object({ ...gameScope, kind: z.literal('hero-recover'), id: z.string().uuid(), characterId: z.string().min(1).max(100) }),
   z.object({ ...gameScope, kind: z.literal('hero-select'), id: z.string().uuid(), characterId: z.string().min(1).max(100) }),
   z.object({ ...gameScope, kind: z.literal('hero-proposal'), id: z.string().uuid(), character: roomCharacterSchema, resources: z.array(roomResourceSchema).max(200) }),
