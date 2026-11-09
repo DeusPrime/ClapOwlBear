@@ -16,41 +16,66 @@ type ModalPort = {
   fallback?: (text: string) => Promise<unknown>;
   report?: (error: string) => void;
 };
+export type ToastEntry = { id: string; roll: ToastRoll };
 export function createNativeRollToasts(api: ModalPort, url: string) {
   const id = 'fr.clap.owlbear/roll-toast';
-  const queue: ToastRoll[] = [];
-  let active: { token: string; roll: ToastRoll; displayed: boolean } | undefined;
+  type Entry = ToastEntry & { timer?: ReturnType<typeof setTimeout> };
+  type Session = { token: string; ready: boolean; entries: Entry[]; timer?: ReturnType<typeof setTimeout> };
+  let session: Session | undefined;
+  let closing: Promise<void> = Promise.resolve();
   let stopped = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const finish = async () => { active = undefined; clearTimeout(timer); await api.close(id).catch(() => {}); void next(); };
-  const fail = async (error: unknown) => {
-    if (!active) return;
-    const { name, visual } = active.roll;
-    api.report?.('Affichage des dés Owlbear indisponible : ' + (error instanceof Error ? error.message : String(error)));
-    await api.fallback?.((name + ' · ' + visual.label + (visual.successes != null ? ' · ' + visual.successes : '')).slice(0,100)).catch(() => {});
-    await finish();
+  const close = (current: Session) => {
+    if (session !== current) return;
+    session = undefined;
+    clearTimeout(current.timer);
+    current.entries.forEach(entry => clearTimeout(entry.timer));
+    closing = api.close(id).catch(() => {});
   };
-  const next = async () => {
-    if (active || stopped || !queue.length) return;
-    const token = crypto.randomUUID();active = { token, roll: queue.shift()!, displayed: false };
-    const target = new URL(url); target.hash = ''; target.searchParams.set('toast',token);
-    try {
-      await api.open({ id, url: target.href, fullScreen: true, hideBackdrop: true, hidePaper: true, disablePointerEvents: true });
-      if (stopped) { await finish(); return; }
-      if (active?.token === token && !active.displayed) timer=setTimeout(()=>{void fail(new Error('Le toast ne confirme pas son ouverture.'));},5000);
-    } catch(error) { await fail(error); }
+  const fail = async (current: Session, error: unknown) => {
+    if (session !== current) return;
+    api.report?.('Affichage des dés Owlbear indisponible : ' + (error instanceof Error ? error.message : String(error)));
+    const entries = [...current.entries];
+    close(current);
+    for (const { roll: { name, visual } } of entries) {
+      await api.fallback?.((name + ' · ' + visual.label + (visual.successes != null ? ' · ' + visual.successes : '')).slice(0,100)).catch(() => {});
+    }
+  };
+  const publish = (current: Session) => {
+    if (session !== current || !current.ready) return;
+    void api.post({ type: 'result', token: current.token, rolls: current.entries.map(({ id, roll }) => ({ id, roll })) }).catch(error => fail(current, error));
   };
   const unsubscribe = api.listen(event => {
-    const data=event.data;
-    if (!active || event.connectionId!==api.connectionId || data?.token!==active.token) return;
-    if(data.type==='ready') void api.post({type:'result',token:active.token,roll:active.roll}).catch(fail);
-    if(data.type==='displayed' && !active.displayed) { active.displayed=true; clearTimeout(timer); api.report?.(''); timer=setTimeout(()=>{void finish();},4800); }
+    const current = session, data = event.data;
+    if (!current || event.connectionId !== api.connectionId || data?.token !== current.token) return;
+    if (data.type === 'ready') { current.ready = true; publish(current); }
+    if (data.type === 'displayed') {
+      const entry = current.entries.find(entry => entry.id === data.id);
+      if (!entry || entry.timer) return;
+      clearTimeout(current.timer);
+      api.report?.('');
+      entry.timer = setTimeout(() => {
+        if (session !== current) return;
+        current.entries = current.entries.filter(item => item !== entry);
+        if (current.entries.length) publish(current);
+        else close(current);
+      }, 4800);
+    }
   });
   return {
     show: async (message: RoomChatMessage) => {
       if (stopped || message.hidden || message.privateTo || message.kind !== 'roll') return;
-      queue.push(toastRoll(message)); if(queue.length>5)queue.shift();void next();
+      await closing;
+      if (stopped) return;
+      const entry: Entry = { id: crypto.randomUUID(), roll: toastRoll(message) };
+      if (session) { session.entries.push(entry); publish(session); return; }
+      const current: Session = { token: crypto.randomUUID(), ready: false, entries: [entry] };
+      session = current;
+      const target = new URL(url); target.hash = ''; target.searchParams.set('toast', current.token);
+      current.timer = setTimeout(() => { void fail(current, new Error('Le toast ne confirme pas son ouverture.')); }, 5000);
+      try {
+        await api.open({ id, url: target.href, fullScreen: true, hideBackdrop: true, hidePaper: true, disablePointerEvents: true });
+      } catch (error) { await fail(current, error); }
     },
-    stop: () => { stopped=true;queue.length=0;unsubscribe();clearTimeout(timer);if(active)void finish(); },
+    stop: () => { stopped = true; unsubscribe(); if (session) close(session); },
   };
 }

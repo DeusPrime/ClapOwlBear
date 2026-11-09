@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import RollingDie from '@/components/RollingDie';
 import RollOutcomeEffect from '@/components/RollOutcomeEffect';
-import type { ToastRoll } from './runtime/native-roll-toasts';
+import type { ToastRoll, ToastEntry } from './runtime/native-roll-toasts';
 import './roll-toast.css';
 export function RollToast({ roll, onShown }: { roll: ToastRoll; onShown?: () => void }) {
   const [rolling, setRolling] = useState(true);
@@ -22,19 +22,24 @@ export function RollToast({ roll, onShown }: { roll: ToastRoll; onShown?: () => 
     <div className="toast-lifetime" aria-hidden="true" />
   </aside>;
 }
-function render(roll: ToastRoll, onShown?: () => void) {
-  if (!roll?.visual || !Array.isArray(roll.visual.dice) || !['failure','success','prowess','complication','neutral'].includes(roll.visual.outcome)) return;
-  document.documentElement.classList.toggle('dark', roll.dark); document.documentElement.lang=roll.lang;
-  createRoot(document.getElementById('app')!).render(<RollToast roll={roll} onShown={onShown} />);
+const root = createRoot(document.getElementById('app')!);
+export function RollToastStack({ entries, onShown }: { entries: ToastEntry[]; onShown?: (id: string) => void }) {
+  return <div className="roll-toast-stack">{entries.map(entry => <RollToast key={entry.id} roll={entry.roll} onShown={() => onShown?.(entry.id)} />)}</div>;
+}
+function render(entries: ToastEntry[], onShown?: (id: string) => void) {
+  const valid = entries.filter(({ roll }) => roll?.visual && Array.isArray(roll.visual.dice) && ['failure','success','prowess','complication','neutral'].includes(roll.visual.outcome));
+  const latest = valid.at(-1)?.roll;
+  if (latest) { document.documentElement.classList.toggle('dark', latest.dark); document.documentElement.lang = latest.lang; }
+  root.render(<RollToastStack entries={valid} onShown={onShown} />);
 }
 const token=new URLSearchParams(location.search).get('toast');
 if(token && OBR.isAvailable) OBR.onReady(()=>{void(async()=>{
-  const connection=await OBR.player.getConnectionId();let shown=false;
+  const connection=await OBR.player.getConnectionId();
   OBR.broadcast.onMessage('fr.clap.owlbear/v3/toast',event=>{
     const data=event.data as any;
-    if(shown || event.connectionId!==connection || data?.type!=='result' || data.token!==token)return;
-    shown=true;render(data.roll,()=>{void OBR.broadcast.sendMessage('fr.clap.owlbear/v3/toast',{type:'displayed',token},{destination:'LOCAL'});});
+    if(event.connectionId!==connection || data?.type!=='result' || data.token!==token || !Array.isArray(data.rolls))return;
+    render(data.rolls,(id)=>{void OBR.broadcast.sendMessage('fr.clap.owlbear/v3/toast',{type:'displayed',token,id},{destination:'LOCAL'});});
   });
   await OBR.broadcast.sendMessage('fr.clap.owlbear/v3/toast',{type:'ready',token},{destination:'LOCAL'});
 })().catch(console.error);});
-else if(location.hash) { try {render(JSON.parse(decodeURIComponent(location.hash.slice(1))));} catch {} }
+else if(location.hash) { try {render([{ id: 'preview', roll: JSON.parse(decodeURIComponent(location.hash.slice(1))) }]);} catch {} }
