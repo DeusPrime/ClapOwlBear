@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 import RollingDie from '@/components/RollingDie';
 
-it.each([false, true])('keeps dice moving with reduced motion %s', async reduced => {
+it.each([false, true])('uses the full site dice animation with reduced motion %s', async reduced => {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -20,7 +20,9 @@ it.each([false, true])('keeps dice moving with reduced motion %s', async reduced
     const frames = animate.mock.calls[0][0] as Keyframe[];
     expect(frames[0].transform).not.toBe(frames.at(-1)?.transform);
     expect(frames.at(-1)?.transform).toBe('translate3d(0, 0px, 0) rotate(0deg)');
-    if (reduced) expect(frames.every(frame => String(frame.transform).startsWith('translate3d(0, 0px, 0)'))).toBe(true);
+    expect(frames[0].transform).toBe('translate3d(0, 0px, 0) rotate(-640deg)');
+    expect(frames.some(frame => !String(frame.transform).startsWith('translate3d(0, 0px, 0)'))).toBe(true);
+    expect(animate.mock.calls[0][1].duration).toBe(760);
     await act(async () => root.render(<RollingDie sides={6} index={0} className="" rolling={false} />));
     expect(cancel).toHaveBeenCalledOnce();
   } finally {
