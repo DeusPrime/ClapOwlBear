@@ -5,7 +5,6 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useRoom } from '@/hooks/use-room';
 import type { Character } from '@/lib/characters';
 import RoomChat from './RoomChat';
-import RoomPlayersBoard from './RoomPlayersBoard';
 import RoomPrivateResources from './RoomPrivateResources';
 import RoomProjectImport from './RoomProjectImport';
 import RoomHeroReserve from './RoomHeroReserve';
@@ -54,8 +53,7 @@ export default function RoomMJWorkspace({ characters }: { characters: Character[
       <TabsContent value="room" forceMount hidden={mobile && pane !== 'room'} className="mt-0 min-w-0 space-y-6">
         <RoomProjectImport />
         <RoomOwlbearLink />
-        <RoomHeroReserve characters={characters} />
-        <div data-tour="room-players"><RoomPlayersBoard characters={characters} /></div>
+        <div data-tour="room-players"><RoomHeroReserve characters={characters} /></div>
         {Boolean(room.projectName || room.privateRefs.length || room.roomHeroes.length || Object.keys(room.savedSheets || {}).length) && <div data-tour="room-private-cards"><RoomPrivateResources characters={characters} /></div>}
       </TabsContent>
       <TabsContent value="chat" forceMount hidden={mobile && pane !== 'chat'} className="room-mj-chat mt-0 min-w-0 lg:sticky lg:top-24">

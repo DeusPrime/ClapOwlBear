@@ -10,7 +10,6 @@ import { loadDirectories } from "@/lib/directories";
 import { loadToolDocuments, toolUrl, type ToolDocument } from "@/lib/toolDocuments";
 import CharacterEditor from "@/pages/CharacterEditor";
 import RoomHeroReserve from "@/components/RoomHeroReserve";
-import RoomPlayersBoard from "@/components/RoomPlayersBoard";
 import RoomHeroProposalDialog from "@/components/RoomHeroProposalDialog";
 import RoomPrivateResources from "@/components/RoomPrivateResources";
 import RoomProjectImport from "@/components/RoomProjectImport";
@@ -50,7 +49,7 @@ export function OwlbearMJWorkspace({ characters }: { characters: Character[] }) 
   return <Tabs value={pane} onValueChange={setPane} className="space-y-4">
     <nav aria-label="Navigation MJ"><TabsList className="grid h-auto w-full grid-cols-4 bg-paper p-0" aria-label={lang === "fr" ? "Onglets MJ" : "GM tabs"}>{[["heroes", "Héros", "Heroes"], ["cards", "Cartes", "Cards"], ["resources", "Ressources", "Resources"], ["chat", "Discussion", "Chat"]].map(([id, fr, en]) => <TabsTrigger key={id} value={id} className="min-h-12 rounded-none border-b-2 border-transparent px-1 data-[state=active]:border-accent data-[state=active]:text-accent">{lang === "fr" ? fr : en}</TabsTrigger>)}</TabsList></nav>
     <RoomHeroProposalDialog />
-    <TabsContent value="heroes" className="space-y-5"><RoomProjectImport /><RoomHeroReserve characters={characters} /><RoomPlayersBoard characters={characters} /><ConnectionStatus /></TabsContent>
+    <TabsContent value="heroes" className="space-y-5"><RoomProjectImport /><RoomHeroReserve characters={characters} /><ConnectionStatus /></TabsContent>
     <TabsContent value="cards"><RoomPrivateResources characters={characters} /></TabsContent>
     <TabsContent value="resources"><Resources /></TabsContent>
     <TabsContent value="chat"><RoomChat messages={room.messages} memberId={room.session.id} members={room.members} /></TabsContent>

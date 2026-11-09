@@ -105,3 +105,23 @@ it("garde uniquement les onglets de la fiche et la discussion après attribution
   expect(document.querySelector('[aria-label="Actions du héros"]')).toBeNull();
   expect(document.querySelector('nav[aria-label="Navigation MJ"]')).toBeNull();
 });
+it('shows a newly received linked card in the already open hero tab after its notification', async () => {
+  const { blankCharacter, upsertCharacter } = await import('@/lib/characters');
+  const { blankPower, upsertPower } = await import('@/lib/powers');
+  const hero = { ...blankCharacter(), nom: 'Receiving hero' };
+  await upsertCharacter(hero);
+  state.value = { ...state.value, session: { id: 'alice', role: 'player', name: 'Alice', characterId: hero.id } };
+  const { mount } = await import('./App');
+  await act(async () => { root = mount(); });
+  await vi.waitFor(async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); }); expect(document.body.textContent).toContain('Receiving hero'); });
+  const resourcesTab = [...document.querySelectorAll('nav[data-tour="hero-tabs"] button')].find(button => button.textContent?.includes('Cartes')) as HTMLButtonElement;
+  expect(resourcesTab).toBeDefined();
+  await act(async () => resourcesTab.click());
+  expect(document.querySelector('[data-tour="hero-linked-resource"]')).toBeNull();
+  const power = { ...blankPower(), directoryId: hero.directoryId, titre: 'Received power' };
+  await upsertPower(power);
+  const updated = { ...hero, linkedResources: [{ type: 'power' as const, id: power.id }] };
+  await upsertCharacter(updated);
+  await act(async () => { window.dispatchEvent(new CustomEvent('clap-room-character-assigned', { detail: { character: updated } })); window.dispatchEvent(new CustomEvent('clap-room-reward', { detail: { title: power.titre, resource: { type: 'power', item: power }, removed: false } })); });
+  await vi.waitFor(async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); }); expect(document.querySelector('[data-tour="hero-linked-resource"]')).not.toBeNull(); });
+});

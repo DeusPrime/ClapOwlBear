@@ -33,6 +33,7 @@ type Snapshot = {
   heroProposals: (Extract<RoomMessage, { kind?: 'hero-proposal' }> & { playerId: string; recovery?: boolean })[];
   pendingHeroProposal?: string;
   exitNotice?: string;
+  savedPlayers?: RoomArchive['players'];
   savedSheets?: RoomArchive['sheets'];
   savedSheetResources?: RoomArchive['sheetResources'];
   privateRefs: PrivateRoomRef[];
@@ -87,7 +88,7 @@ export class RoomClient {
     const heroes = this.archive?.heroes || [];
     if (this.archive) patch = { owlbearUrl: this.archive.owlbearUrl, ...patch };
     patch = { roomResources: this.archive?.resources as BundledResource[] || [], ...patch };
-    this.state = { ...this.state, projectId: this.archive?.projectId, projects: Object.entries(this.archive?.projectLinks || {}).map(([id, project]) => ({ id, name: project.name })), roomHeroes: (this.archive?.projectId ? heroes.filter(hero => active.has(hero.id)) : heroes) as Character[], ...patch };
+    this.state = { ...this.state, savedPlayers: this.archive?.players || {}, projectId: this.archive?.projectId, projects: Object.entries(this.archive?.projectLinks || {}).map(([id, project]) => ({ id, name: project.name })), roomHeroes: (this.archive?.projectId ? heroes.filter(hero => active.has(hero.id)) : heroes) as Character[], ...patch };
     this.listeners.forEach(l => l());
   }
   private persist() {

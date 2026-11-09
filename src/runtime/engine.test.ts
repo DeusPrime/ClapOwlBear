@@ -251,3 +251,28 @@ describe("Moteur CLAP! partagé — MJ et joueurs", () => {
     expect(json).not.toContain(alice.snapshot().session!.token);
   }, 20000);
 });
+it('keeps an approved player proposal in the room library and the native room in local browser saves', async () => {
+  vi.stubGlobal('RTCPeerConnection', MemoryPeer);
+  const world = new FakeRodeo(); world.add('host', 'GM'); world.add('alice', 'PLAYER');
+  const hs = new OwlbearRoomService(world.port('host'), 'AABBCC112233'), ps = new OwlbearRoomService(world.port('alice'), 'AABBCC112233');
+  services.push(hs, ps); await hs.start(); await ps.start();
+  const host = await engine(hs, 'host'), player = await engine(ps, 'alice', 'AABBCC112233');
+  await vi.waitFor(() => expect(host.snapshot().connected).toContain('alice'), { timeout: 12000 });
+  const { blankCharacter, upsertCharacter } = await import('@/lib/characters');
+  const source = { ...blankCharacter(), nom: 'Proposed hero', notes: 'Full proposed notes' };
+  await upsertCharacter(source);
+  await player.selectCharacter(source.id);
+  await vi.waitFor(() => expect(host.snapshot().heroProposals).toHaveLength(1));
+  const proposal = host.snapshot().heroProposals[0];
+  expect(proposal.character.notes).toBe(source.notes);
+  await host.resolveHeroProposal(proposal.id, true);
+  await vi.waitFor(() => expect(player.snapshot().session?.characterId).toBe(host.snapshot().roomHeroes[0]?.id));
+  expect(host.snapshot().roomHeroes).toHaveLength(1);
+  expect(host.snapshot().roomHeroes[0].nom).toBe(source.nom);
+  const { listLocalRooms } = await import('@/lib/roomArchive');
+  await vi.waitFor(async () => {
+    const saved = (await listLocalRooms()).find(room => room.id === host.snapshot().session?.localRoomId);
+    expect(saved?.heroes.some(hero => hero.nom === source.nom)).toBe(true);
+    expect(saved?.sheets.alice.nom).toBe(source.nom);
+  });
+}, 20000);

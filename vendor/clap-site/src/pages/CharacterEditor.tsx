@@ -2457,6 +2457,7 @@ const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, compactR
 
   useEffect(() => {
     const receiveRoomChange = (event: Event) => {
+      void refreshHeroResources();
       const hero = (event as CustomEvent<{ character?: Character }>).detail?.character;
       if (!hero || hero.id !== id) return;
       const patch = { armes: hero.armes, armures: hero.armures, autresAccessoires: hero.autresAccessoires, linkedResources: hero.linkedResources, injuries: hero.injuries, stress: hero.stress, griefs: hero.griefs, notes: hero.notes };
@@ -2465,7 +2466,7 @@ const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, compactR
     };
     window.addEventListener("clap-room-character-assigned", receiveRoomChange);
     return () => window.removeEventListener("clap-room-character-assigned", receiveRoomChange);
-  }, [id]);
+  }, [id, refreshHeroResources]);
 
   const update = (patch: Partial<Character>) => setC((cur) => (cur ? { ...cur, ...patch } : cur));
 
