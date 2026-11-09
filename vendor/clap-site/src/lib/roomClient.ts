@@ -1,3 +1,4 @@
+import {applySheetValues,applySheetChanges,createSheetChanges,sheetValues,valuesAt,sheetValue,validSheetPath,type SheetChange,type SheetValue} from '@owlbear/runtime/sheet-patch';
 import {sheetSignature,contentDigest} from '@owlbear/runtime/sheet-signature';
 import {callRoomApi,sharedRoomClient,createRoomPeer} from '@owlbear/runtime/client';
 import type { RollVisual } from "./rollVisual";
@@ -9,7 +10,7 @@ import { owlbearRoomUrlSchema } from './roomProtocol';
 import { playerIdentityToken } from './playerIdentity';
 import { rememberRoomNickname } from "./roomNickname";
 import { toast } from "sonner";
-import { getCharacter, upsertCharacter, deleteCharacter, type Character } from "./characters";
+import { getCharacter, upsertCharacter, mutateCharacter, deleteCharacter, type Character } from "./characters";
 import { roomCharacterSchema, type PublicRoll, type RoomChatMessage, type RoomRollRequest, type RoomListing, type RoomMember, type RoomMessage, type RoomPoll, type RoomSession, type RoomSignal } from "./roomProtocol";
 import { rememberOwnedRoom, ownedRoom, ownedLocalRoom, forgetOwnedRoom, rememberRoomSettings, roomSettings } from './roomResume';
 import { RoomTransport } from "./roomTransport";
@@ -20,7 +21,7 @@ import { saveLocalRoom, loadLocalRoom, captureRoomLibrary, exportRoomArchive, ty
 
 const API = (import.meta.env.VITE_ROOM_API_URL || "/api/rooms").replace(/\/$/, "");
 const STORAGE = "clap-room-session-v1";
-type Peer = { pc: RTCPeerConnection; transport?: RoomTransport; connection: string; instance: string; started: number; sheet: string; lastMessage?: number; sendingSheet?: boolean; resumeChecked?: boolean; resumeBusy?: boolean; resumeTimer?: ReturnType<typeof setTimeout>; resumeSummary?: {id:string;signature:string;generation?:string;resources:Map<string,string>}; assignment?: string; resources?: Map<string, string> };
+type Peer = { pc: RTCPeerConnection; transport?: RoomTransport; connection: string; instance: string; started: number; sheet: string; baseCharacter?:Character; patchPreparing?:boolean; pendingPatch?:{id:string;target:Character;changes:SheetChange[];timer:ReturnType<typeof setTimeout>}; pendingFull?:{id:string;target:Character;timer:ReturnType<typeof setTimeout>}; lastMessage?: number; sendingSheet?: boolean; resumeChecked?: boolean; resumeBusy?: boolean; resumeTimer?: ReturnType<typeof setTimeout>; resumeSummary?: {id:string;signature:string;generation?:string;character?:Character;resources:Map<string,string>}; assignment?: string; resources?: Map<string, string> };
 type Snapshot = {
   sheetTransfers?: string[];
   projectName?: string;
@@ -74,11 +75,18 @@ export class RoomClient {
   private releaseLock?: () => void;
   private lockAbort?: AbortController;
   private characterSaved = (event: Event) => {
+    if((event as Event & {clapRoomRemote?:boolean}).clapRoomRemote)return;
     const hero = (event as CustomEvent<Character>).detail;
+    if(this.state.session?.role==='player' && hero.id===this.state.session.characterId){for(const peer of this.peers.values())void this.sendSheet(peer);return;}
+    const owner=Object.entries({...this.archive?.sheets,...this.state.sheets}).find(([,sheet])=>sheet.id===hero.id)?.[0];
+    const peer=owner?this.peers.get(owner):undefined;
+    if(this.state.session?.role==='mj' && owner && peer && (peer.transport?.channel as any)?.deltaSupported && peer.baseCharacter){
+      this.resourceQueue=this.resourceQueue.then(async()=>{const current=this.state.sheets[owner];if(!current)return;await this.commitSheet(owner,current,hero,true);await this.flushSheetPatch(peer,this.state.sheets[owner]);}).catch(()=>this.update({error:'Synchronisation impossible.'}));return;
+    }
     if (this.state.session?.role !== 'mj' || !this.archive?.heroes.some(value => value.id === hero.id)) return;
     const parsed = roomCharacterSchema.safeParse({ ...hero, portrait: hero.portrait || undefined });
     if (!parsed.success) return;
-    this.archive = { ...this.archive, heroes: this.archive.heroes.map(value => value.id === hero.id ? parsed.data : value) };
+    this.archive = { ...this.archive, ...(owner?{sheets:{...this.archive.sheets,[owner]:parsed.data}}:{}), heroes: this.archive.heroes.map(value => value.id === hero.id ? parsed.data : value) };
     this.update({}); this.persist();
   };
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -155,6 +163,15 @@ export class RoomClient {
     const owner = Object.entries(this.state.sheets).find(([, hero]) => hero.id === character.id)?.[0];
     if (owner) {
       const current = this.state.sheets[owner];
+      const peer=this.peers.get(owner);
+      if((peer?.transport?.channel as any)?.deltaSupported && peer?.baseCharacter){
+        let before=current;try{if(expectedState)before={...current,...JSON.parse(expectedState)};}catch{}
+        const desired={...before,...roomHeroEditFields(character)};
+        const changes=await createSheetChanges(before,desired);
+        const next=applySheetValues(current,changes);
+        await this.commitSheet(owner,current,next,true);
+        await this.flushSheetPatch(peer,this.state.sheets[owner]);return;
+      }
       if (expectedState ? roomHeroEditSignature(current) !== expectedState : current.updatedAt !== expectedUpdatedAt) throw new Error('La fiche a changé. Rouvre-la avant de modifier son état.');
       return this.heroAction(owner, { type: 'edit-sheet', character: roomCharacterSchema.parse({ ...character, portrait: character.portrait || undefined }), expectedUpdatedAt, expectedState: expectedState || roomHeroEditSignature(current) });
     }
@@ -217,7 +234,7 @@ export class RoomClient {
     this.pendingCommands.clear();
     for (const pending of this.resourceOperations.values()) { clearTimeout(pending.timer); pending.reject(new Error('Le projet de la salle a change.')); }
     this.resourceOperations.clear();
-    for (const peer of this.peers.values()) { peer.sheet = ''; peer.assignment = undefined; peer.resources = new Map(); }
+    for (const peer of this.peers.values()) { peer.sheet = ''; peer.assignment = undefined; peer.resources = new Map();peer.baseCharacter=undefined;clearTimeout(peer.pendingPatch?.timer);peer.pendingPatch=undefined;clearTimeout(peer.pendingFull?.timer);peer.pendingFull=undefined; }
   }
   async addRoomHero(source: Character, resources?: BundledResource[]) {
     const key = `${this.archive?.id}:${source.id}`;
@@ -517,6 +534,7 @@ export class RoomClient {
     if (this.state.session?.id !== session.id || this.peers.get(playerId) !== peer) throw new Error('La connexion a changé. Réessaie.');
     const resources = savedEntry ? this.state.sheetResources[savedEntry[0]] || this.archive?.sheetResources[savedEntry[0]] || [] : this.archive?.resources.filter(resource => character.linkedResources.some(link => link.type === resource.type && link.id === resource.item.id)) || [];
     if (!(this.archive?.heroes.some(hero => hero.id === characterId) || Object.values(this.archive?.sheets || {}).some(hero => hero.id === characterId)) || this.state.session?.id !== session.id || this.peers.get(playerId) !== peer) throw new Error('Le héros ou la connexion a changé. Réessaie.');
+    peer.baseCharacter=structuredClone(parsed.data) as Character;clearTimeout(peer.pendingPatch?.timer);peer.pendingPatch=undefined;clearTimeout(peer.pendingFull?.timer);peer.pendingFull=undefined;
     const message: Extract<RoomMessage, { kind?: 'assign-sheet' }> = { kind: 'assign-sheet', assignmentId: crypto.randomUUID(), character: parsed.data, resources: resources.map(resource => transferableRoomResource(resource as BundledResource)),
       project: { id: session.localRoomId || session.room, title: this.state.roomInfo?.title || `Salle de ${session.name}` } };
     if (Object.entries({ ...this.archive?.sheets, ...this.state.sheets }).some(([id, hero]) => id !== playerId && hero.id === characterId && this.state.members.some(member => member.id === id && member.role === 'player'))) throw new Error('Ce héros est déjà attribué à un autre joueur.');
@@ -553,12 +571,12 @@ export class RoomClient {
       const project = ensureRoomProject(message.project?.id || session.room, message.project?.title || this.state.roomInfo?.title || 'Salle de jeu', session.roomDirectoryId);
       const character = { ...message.character, directoryId: project.id, linkedResources: [] } as Character;
       for (const resource of message.resources || []) character.linkedResources.push(await importRoomResource(resource as BundledResource, character));
-      await upsertCharacter(character);
+      await upsertCharacter(character,{roomRemote:true});
       if (this.state.session?.id !== session.id || this.state.session.gameGeneration !== message.roomGeneration || !this.state.members.some(member => member.id === sender && member.role === 'mj')) return;
       this.save({ ...this.state.session, characterId: character.id, receivedAssignment: message.assignmentId, roomDirectoryId: project.id });
       selectDirectory(project.id);
-      this.peers.forEach(peer => {peer.resumeChecked=true;peer.resumeSummary=undefined;});
-      const assignedCharacter=await getCharacter(character.id)||character;const assignedSignature=sheetSignature(roomCharacterSchema.parse({...assignedCharacter,portrait:assignedCharacter.portrait||undefined}));this.peers.forEach(peer => { peer.sheet = message.resources?.length ? '' : assignedSignature; });
+      this.peers.forEach(peer => {peer.resumeChecked=true;peer.resumeSummary=undefined;clearTimeout(peer.pendingPatch?.timer);peer.pendingPatch=undefined;clearTimeout(peer.pendingFull?.timer);peer.pendingFull=undefined;});
+      const assignedCharacter=await getCharacter(character.id)||character;const assignedSignature=sheetSignature(roomCharacterSchema.parse({...assignedCharacter,portrait:assignedCharacter.portrait||undefined}));this.peers.forEach(peer => {peer.baseCharacter=message.resources?.length?undefined:structuredClone(assignedCharacter); peer.sheet = message.resources?.length ? '' : assignedSignature; });
       acknowledge();
       window.dispatchEvent(new Event('clap-room-character-assigned'));
       toast.success(localizeText('Le MJ t’a attribué une fiche de héros.'));
@@ -612,7 +630,7 @@ export class RoomClient {
     const sheets = { ...this.state.sheets }; delete sheets[id];
     const sheetResources = { ...this.state.sheetResources }; delete sheetResources[id];
     for (const [operationId, operation] of this.resourceOperations) if (operation.playerId === id) { clearTimeout(operation.timer); operation.reject(new Error("Joueur déconnecté.")); this.resourceOperations.delete(operationId); }
-    clearTimeout(peer?.resumeTimer);
+    clearTimeout(peer?.resumeTimer);clearTimeout(peer?.pendingPatch?.timer);clearTimeout(peer?.pendingFull?.timer);
     this.update({ sheetResources, sheets, connected: this.state.connected.filter(key => key !== id) });
   }
   private newPeer(member: RoomMember, connection: string) {
@@ -799,7 +817,7 @@ export class RoomClient {
         reward = { title: item.nom || 'Objet', removed: true, item };
       }
       if (this.state.session?.id !== session.id || this.state.session.characterId !== hero.id || !this.state.members.some(member => member.id === sender && member.role === 'mj')) throw new Error('Fiche ou MJ modifié.');
-      await upsertCharacter(hero);
+      await upsertCharacter(hero,{roomRemote:true});
       this.save({ ...this.state.session!, receivedResourceOps: [...(this.state.session!.receivedResourceOps || []), message.operationId].slice(-200) });
       window.dispatchEvent(new CustomEvent('clap-room-character-assigned', { detail: { character: hero } }));
       if (action.type === 'edit-sheet') {
@@ -824,7 +842,7 @@ export class RoomClient {
       if (!latest) throw new Error('Fiche introuvable.');
       if (!latest.linkedResources.some(item => item.type === link.type && item.id === link.id)) latest.linkedResources = [...latest.linkedResources, link];
       if (latest.linkedResources.length > 200) throw new Error('La fiche contient trop de cartes.');
-      await upsertCharacter(latest);
+      await upsertCharacter(latest,{roomRemote:true});
       this.save({ ...this.state.session, receivedResourceOps: [...(this.state.session.receivedResourceOps || []), message.operationId].slice(-200) });
       window.dispatchEvent(new CustomEvent('clap-room-character-assigned', { detail: { character: latest } }));
       window.dispatchEvent(new CustomEvent('clap-room-reward', { detail: { title: message.resource.item.titre || 'Carte', resource: message.resource, removed: false } }));
@@ -900,6 +918,69 @@ export class RoomClient {
     }
     if (!this.stopped && generation === this.generation) this.timer = setTimeout(() => void this.tick(generation), 3000);
   }
+  private async commitSheet(memberId:string, before:Character, desired:Character, force:boolean) {
+    const scope=this.state.session;
+    const parsed=roomCharacterSchema.parse({...desired,portrait:desired.portrait||undefined}) as Character;
+    const changes=sheetValues(before,parsed);
+    if(!changes.length)return before;
+    let stored=await mutateCharacter(before.id,latest=>applySheetValues(latest,changes.filter(change=>force||JSON.stringify(sheetValue(latest,change.path))===JSON.stringify(sheetValue(before,change.path)))),{roomRemote:true});
+    if(!stored){stored={...before,...parsed};await upsertCharacter(stored,{roomRemote:true});}
+    if(!scope||this.state.session?.id!==scope.id||this.state.session.gameGeneration!==scope.gameGeneration||(scope.role==='player'&&this.state.session.characterId!==scope.characterId))throw new Error('La salle ou le héros a changé.');
+    const next=roomCharacterSchema.parse({...stored,portrait:stored.portrait||undefined}) as Character;
+    if(this.state.session?.role==='mj'){
+      const directory=this.archive?.heroes.find(hero=>hero.id===next.id)?.directoryId;
+      if(this.archive)this.archive={...this.archive,heroes:this.archive.heroes.map(hero=>hero.id===next.id?{...next,directoryId:directory||next.directoryId}:hero)};
+      this.update({sheets:{...this.state.sheets,[memberId]:next}});this.publishGame();
+    }
+    window.dispatchEvent(new CustomEvent('clap-room-character-assigned',{detail:{character:stored,changes:sheetValues(before,next)}}));
+    return next;
+  }
+  private async flushSheetPatch(peer:Peer, character:Character) {
+    if(!(peer.transport?.channel as any)?.deltaSupported||!peer.baseCharacter||peer.pendingFull||peer.pendingPatch||peer.patchPreparing)return;
+    if(peer.baseCharacter.id!==character.id){peer.baseCharacter=undefined;return;}
+    const scope=this.state.session;
+    peer.patchPreparing=true;
+    try{
+      const parsed=roomCharacterSchema.parse({...character,portrait:character.portrait||undefined}) as Character;
+      const changes=(await createSheetChanges(peer.baseCharacter,parsed)).slice(0,500);
+      if(peer.transport?.channel.readyState!=='open'||peer.baseCharacter?.id!==character.id||this.state.session?.id!==scope?.id||this.state.session?.gameGeneration!==scope?.gameGeneration)return;
+      if(!changes.length){peer.sheet=sheetSignature(parsed);return;}
+      const id=crypto.randomUUID(),target=applySheetValues(peer.baseCharacter,changes);
+      peer.pendingPatch={id,target,changes,timer:setTimeout(()=>{if(peer.pendingPatch?.id===id){peer.pendingPatch=undefined;this.update({error:'La modification attend une confirmation. Nouvelle tentative en cours.'});void this.syncPeerSheet(peer);}},15000)};
+      if(!peer.transport.send({kind:'sheet-patch',id,characterId:character.id,changes})){clearTimeout(peer.pendingPatch.timer);peer.pendingPatch=undefined;this.update({error:'Modification non transmise.'});}
+    }finally{peer.patchPreparing=false;}
+  }
+  private async syncPeerSheet(peer:Peer){if(this.state.session?.role==='player')await this.sendSheet(peer);else{const entry=[...this.peers].find(([,value])=>value===peer);const hero=entry&&this.state.sheets[entry[0]];if(hero)await this.flushSheetPatch(peer,hero);}}
+  private async receiveSheetPatch(sender:string,message:Extract<RoomMessage,{kind:'sheet-patch'}>){
+    const session=this.state.session,peer=this.peers.get(sender),source=this.state.members.find(member=>member.id===sender);
+    if(!session||!peer||(peer.transport?.channel as any)?.deltaSupported!==true||!source)return;
+    const own=session.role==='player';
+    if(own?source.role!=='mj'||session.characterId!==message.characterId:source.role!=='player'||this.state.sheets[sender]?.id!==message.characterId)return;
+    let current=own?await getCharacter(message.characterId):this.state.sheets[sender];if(!current)return;
+    try{
+      const desired=await applySheetChanges(current,message.changes,own);
+      if(this.state.session?.id!==session.id||this.state.session.gameGeneration!==session.gameGeneration||this.peers.get(sender)!==peer)return;
+      const next=await this.commitSheet(own?session.id:sender,current,desired,own);
+      const actual=valuesAt(next,message.changes);
+      const corrections=actual.filter((value,index)=>JSON.stringify(value)!==JSON.stringify(({path:message.changes[index].path,...(message.changes[index].remove?{remove:true}:{value:message.changes[index].value})})));
+      peer.baseCharacter=applySheetValues(peer.baseCharacter||current,actual);
+      peer.transport?.send({kind:'sheet-patch-result',id:message.id,characterId:message.characterId,corrections});
+      void this.syncPeerSheet(peer);
+    }catch(cause){peer.transport?.send({kind:'sheet-patch-result',id:message.id,characterId:message.characterId,corrections:valuesAt(current,message.changes.filter(change=>validSheetPath(change.path))),error:cause instanceof Error?cause.message.slice(0,250):'Modification invalide.'});}
+  }
+  private async finishSheetPatch(sender:string,message:Extract<RoomMessage,{kind:'sheet-patch-result'}>){
+    const session=this.state.session,peer=this.peers.get(sender),pending=peer?.pendingPatch;
+    if(!session||!peer||!pending||pending.id!==message.id||pending.target.id!==message.characterId)return;
+    clearTimeout(pending.timer);peer.pendingPatch=undefined;
+    const confirmed=message.error?peer.baseCharacter!:applySheetValues(peer.baseCharacter||pending.target,valuesAt(pending.target,pending.changes));
+    peer.baseCharacter=applySheetValues(confirmed,message.corrections);
+    const own=session.role==='player',current=own?await getCharacter(message.characterId):this.state.sheets[sender];
+    if(this.state.session?.id!==session.id||this.state.session.gameGeneration!==session.gameGeneration||this.peers.get(sender)!==peer||(own&&this.state.session.characterId!==message.characterId))return;
+    if(current && message.corrections.length){const corrections=message.corrections.filter(change=>JSON.stringify(sheetValue(current,change.path))===JSON.stringify(sheetValue(pending.target,change.path)));if(corrections.length)await this.commitSheet(own?session.id:sender,current,applySheetValues(current,corrections),true);}
+    peer.sheet=sheetSignature(peer.baseCharacter);
+    if(message.error)this.update({error:message.error});
+    else await this.syncPeerSheet(peer);
+  }
   private resumeAssignment(sender:string, peer:Peer) {
     if (this.peers.get(sender)!==peer || this.state.session?.role!=='mj') return;
     clearTimeout(peer.resumeTimer);peer.resumeChecked=true;
@@ -921,6 +1002,8 @@ export class RoomClient {
     if(this.archive?.sheets[sender]!==saved){this.resumeAssignment(sender,peer);return;}
     peer.resumeChecked=true;
     if(matches && saved){
+      if((peer.transport?.channel as any)?.deltaSupported){const local=await getCharacter(saved.id);await upsertCharacter({...local,...saved,directoryId:local?.directoryId||saved.directoryId} as Character,{roomRemote:true});}
+      peer.baseCharacter=structuredClone(saved) as Character;
       this.approvedSheetIds.set(sender,saved.id);this.assignments.delete(sender);
       this.update({sheets:{...this.state.sheets,[sender]:saved as Character},sheetResources:{...this.state.sheetResources,[sender]:resources}});
     }
@@ -950,15 +1033,19 @@ export class RoomClient {
           for(const resource of resources)signatures.set(character!.id+':'+resource.type+':'+resource.item.id,await contentDigest(transferableRoomResource(resource)));
           const digest=await contentDigest(message.character);
           if(this.state.session!==session||peer.transport?.channel.readyState!=='open')return;
-          const id=crypto.randomUUID();peer.resumeSummary={id,signature:json,generation:session.gameGeneration,resources:signatures};
+          const id=crypto.randomUUID();peer.resumeSummary={id,signature:json,generation:session.gameGeneration,character:message.character as Character|undefined,resources:signatures};
           if(!peer.transport.send({kind:'sheet-summary',id,characterId:character?.id||null,digest:character?digest:null,resources:[...signatures].map(([key,digest])=>({key,digest}))}))peer.resumeSummary=undefined;
         } finally {peer.resumeBusy=false;}
         return;
       }
+      if((peer.transport.channel as any).deltaSupported && message.character && peer.baseCharacter){await this.flushSheetPatch(peer,message.character as Character);if(peer.pendingPatch||peer.patchPreparing)return;}
+      if(peer.pendingFull)return;
       if (json !== peer.sheet) {
+        if((peer.transport.channel as any).deltaSupported && message.character){const id=crypto.randomUUID();message.syncId=id;peer.pendingFull={id,target:structuredClone(message.character) as Character,timer:setTimeout(()=>{peer.pendingFull=undefined;peer.sheet='';void this.sendSheet(peer);},15000)};}
         if (peer.transport.send(message)) peer.sheet = json;
         else this.update({ error: "La fiche n’a pas pu être transmise. Réduis la taille de son portrait." });
       }
+      if(peer.pendingFull)return;
       if (character && parsed?.success && character.linkedResources.length) {
         const { loadLinkedBundledResources } = await import('./resourceBundle');
         const resources = await loadLinkedBundledResources(character);
@@ -980,6 +1067,16 @@ export class RoomClient {
     const source = this.state.members.find(value => value.id === sender);
     if (!source) return;
     if (message.kind !== "game-state" && session.gameGeneration && message.roomGeneration !== session.gameGeneration) return;
+    if(message.kind==='sheet-ready' && session.role==='player' && source.role==='mj'){
+      const peer=this.peers.get(sender);if(peer?.pendingFull?.id!==message.id)return;
+      clearTimeout(peer.pendingFull.timer);peer.baseCharacter=peer.pendingFull.target;peer.pendingFull=undefined;void this.sendSheet(peer);return;
+    }
+    if(message.kind==='sheet-patch'){
+      this.resourceQueue=this.resourceQueue.then(()=>this.receiveSheetPatch(sender,message)).catch(()=>this.update({error:'Synchronisation impossible.'}));return;
+    }
+    if(message.kind==='sheet-patch-result'){
+      this.resourceQueue=this.resourceQueue.then(()=>this.finishSheetPatch(sender,message)).catch(()=>this.update({error:'Synchronisation impossible.'}));return;
+    }
     if(message.kind==='game-message' && session.role==='player' && source.role==='mj') {
       if(!this.state.messages.some(item=>item.id===message.message.id))this.update({messages:[...this.state.messages,message.message].sort((a,b)=>a.id-b.id).slice(-3200),requests:message.message.requestId?this.state.requests.filter(request=>request.id!==message.message.requestId):this.state.requests});
       return;
@@ -991,7 +1088,7 @@ export class RoomClient {
       const peer=this.peers.get(sender), summary=peer?.resumeSummary;
       if(!peer || !summary || summary.id!==message.id)return;
       peer.resumeChecked=true;
-      if(message.accepted){peer.sheet=summary.signature;peer.resources=new Map([...summary.resources].filter(([key])=>!message.needed.includes(key)));}
+      if(message.accepted){peer.baseCharacter=summary.character;peer.sheet=summary.signature;peer.resources=new Map([...summary.resources].filter(([key])=>!message.needed.includes(key)));}
       peer.resumeSummary=undefined;void this.sendSheet(peer);return;
     }
     if (message.kind === 'hero-recover') {
@@ -1125,7 +1222,10 @@ export class RoomClient {
         const hero = { ...message.character, directoryId: current?.directoryId || message.character.directoryId };
         this.archive = { ...this.archive, heroes: [...this.archive.heroes.filter(value => value.id !== hero.id), hero] };
       }
-      this.update({ sheets, sheetResources: { ...this.state.sheetResources, [sender]: resources } }); this.publishGame(); return;
+      this.update({ sheets, sheetResources: { ...this.state.sheetResources, [sender]: resources } }); this.publishGame();
+      const peer=this.peers.get(sender);
+      if(message.character && peer && (peer.transport?.channel as any)?.deltaSupported){const character=message.character;peer.baseCharacter=structuredClone(character) as Character;this.resourceQueue=this.resourceQueue.then(async()=>{await upsertCharacter({...character,directoryId:(this.archive?.heroes.find(hero=>hero.id===character.id)?.directoryId||character.directoryId)} as Character,{roomRemote:true});if(message.syncId&&this.peers.get(sender)===peer)peer.transport?.send({kind:'sheet-ready',id:message.syncId,characterId:character.id});}).catch(()=>this.update({error:'Sauvegarde de la fiche impossible.'}));}
+      return;
     }
     if (message.kind !== 'roll') return;
     const roll = { ...message, sender: session.role === "mj" ? sender : message.sender };

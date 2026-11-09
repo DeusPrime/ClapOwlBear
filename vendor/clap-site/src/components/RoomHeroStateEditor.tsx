@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
-import { INJURY_LOCATIONS, INJURY_LEVELS, STRESS_LEVELS, GRIEF_LEVELS, type Character } from '@/lib/characters';
+import {sheetValues,applySheetValues} from '@owlbear/runtime/sheet-patch';
+import { useEffect, useRef, useState } from 'react';
+import { FACET_LABELS, INJURY_LOCATIONS, INJURY_LEVELS, STRESS_LEVELS, GRIEF_LEVELS, type Character } from '@/lib/characters';
 import { roomClient } from '@/lib/roomClient';
 import { roomHeroEditSignature } from '@/lib/roomInventoryChanges';
 import { Button } from './ui/button';
@@ -10,6 +11,18 @@ export default function RoomHeroStateEditor({ hero }: { hero: Character }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const initialState = useRef('');
+  const previousHero=useRef(hero);
+  useEffect(()=>{
+    const previous=previousHero.current;
+    const remote=sheetValues(previous,hero);
+    setDraft(current=>{if(!current)return current;const dirty=sheetValues(previous,current);return applySheetValues(current,remote.filter(change=>!dirty.some(local=>local.path.join('.').startsWith(change.path.join('.'))||change.path.join('.').startsWith(local.path.join('.')))));});
+    previousHero.current=hero;initialState.current=roomHeroEditSignature(hero);
+  },[hero]);
+  useEffect(()=>{
+    if(!draft||roomHeroEditSignature(draft)===initialState.current)return;
+    const timer=setTimeout(()=>{void roomClient.updateRoomHero(draft,draft.updatedAt,initialState.current).catch(cause=>setError(cause.message));},200);
+    return()=>clearTimeout(timer);
+  },[draft]);
   const [category, setCategory] = useState<'armes' | 'armures' | 'autresAccessoires'>('autresAccessoires');
   const [item, setItem] = useState({ nom: '', proprietes: '', degats: '', poids: '', protection: '' });
   async function save() {
@@ -20,10 +33,11 @@ export default function RoomHeroStateEditor({ hero }: { hero: Character }) {
     finally { setBusy(false); }
   }
   return <>
-    <Button variant="outline" onClick={() => { initialState.current = roomHeroEditSignature(hero); setDraft(structuredClone(hero)); setError(''); setItem({ nom: '', proprietes: '', degats: '', poids: '', protection: '' }); }}>Blessures, état et inventaire</Button>
-    <Dialog open={Boolean(draft)} onOpenChange={open => { if (!open && !busy) setDraft(null); }}><DialogContent className="max-h-[90dvh] max-w-2xl overflow-y-auto bg-paper">
-      <DialogTitle>État de {hero.nom || 'ce héros'}</DialogTitle><DialogDescription>Ces changements sont enregistrés dans la salle. Le héros du projet d’origine reste inchangé.</DialogDescription>
+    <Button variant="outline" onClick={() => { initialState.current = roomHeroEditSignature(hero); setDraft(structuredClone(hero)); setError(''); setItem({ nom: '', proprietes: '', degats: '', poids: '', protection: '' }); }}>Attributs, constantes et inventaire</Button>
+    <Dialog open={Boolean(draft)} onOpenChange={open => { if (!open && !busy) void save(); }}><DialogContent className="max-h-[90dvh] max-w-2xl overflow-y-auto bg-paper">
+      <DialogTitle>État de {hero.nom || 'ce héros'}</DialogTitle><DialogDescription>Ces changements sont synchronisés en direct dans la salle. Le héros du projet d’origine reste inchangé.</DialogDescription>
       {draft && <form className="space-y-5" onSubmit={event => { event.preventDefault(); void save(); }}><fieldset disabled={busy} className="space-y-4">
+        <fieldset className="space-y-3 rounded border border-ink/20 p-3"><legend className="px-1 font-bold">Attributs</legend>{(['corps','esprit','ame'] as const).map(facet=><div key={facet} className="space-y-2"><p className="font-bold">{FACET_LABELS[facet]}</p>{(['skills','supernatural'] as const).filter(kind=>kind==='skills'||draft.supernaturalEnabled).map(kind=>Object.entries(draft.facets[facet][kind]).map(([name,value])=><label key={kind+name} className="flex items-center justify-between gap-2 text-sm">{name}<input type="number" aria-label={name+' '+kind} min={kind==='skills'?-1:0} max={kind==='skills'?6:5} value={value} onChange={event=>setDraft({...draft,facets:{...draft.facets,[facet]:{...draft.facets[facet],[kind]:{...draft.facets[facet][kind],[name]:Math.max(kind==='skills'?-1:0,Math.min(kind==='skills'?6:5,Number(event.target.value)))}}}})} className="w-24 border border-ink bg-paper p-2"/></label>))}</div>)}</fieldset>
         {INJURY_LOCATIONS.map(location => <fieldset key={location} className="rounded border border-ink/20 p-3"><legend className="px-1 font-bold">{location}</legend><div className="flex flex-wrap gap-3">{INJURY_LEVELS.map((level, index) => <label key={level} className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(draft.injuries[location]?.[index])} onChange={event => setDraft({ ...draft, injuries: { ...draft.injuries, [location]: Array.from({ length: 7 }, (_, i) => i === index ? event.target.checked : Boolean(draft.injuries[location]?.[i])) } })} />{level}</label>)}</div></fieldset>)}
         {(['stress', 'griefs'] as const).map(field => <fieldset key={field} className="rounded border border-ink/20 p-3"><legend className="px-1 font-bold">{field === 'stress' ? 'Stress' : 'Griefs'}</legend><div className="flex flex-wrap gap-3">{(field === 'stress' ? STRESS_LEVELS : GRIEF_LEVELS).map((level, index) => <label key={level} className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(draft[field][index])} onChange={event => setDraft({ ...draft, [field]: draft[field].map((value, i) => i === index ? event.target.checked : value) })} />{level}</label>)}</div></fieldset>)}
         <label className="block space-y-2 text-sm font-bold">Notes de partie<textarea rows={3} value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })} className="w-full border border-ink bg-paper p-3 font-normal" /></label>

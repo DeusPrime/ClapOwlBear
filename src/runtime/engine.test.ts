@@ -346,3 +346,50 @@ it('delivers a live roll ahead of blocked history and retains it when an older h
     expect(player.snapshot().messages.filter(message=>message.kind==='roll')).toHaveLength(1);
   } finally {spy?.mockRestore();delete prototype.prioritySupported;delete prototype.sendPriority;}
 },15000);
+it('synchronizes live constants, attributes and inventory in both directions using only deltas', async () => {
+  const prototype=MemoryChannel.prototype as any;
+  Object.defineProperty(prototype,'prioritySupported',{configurable:true,value:true});Object.defineProperty(prototype,'deltaSupported',{configurable:true,value:true});prototype.sendPriority=prototype.send;
+  const spies:ReturnType<typeof vi.spyOn>[]=[];
+  try {
+    vi.stubGlobal('RTCPeerConnection',MemoryPeer);
+    const world=new FakeRodeo();world.add('host','GM');world.add('alice','PLAYER');
+    const hs=new OwlbearRoomService(world.port('host'),'D1D2D3D4D5D6'),ps=new OwlbearRoomService(world.port('alice'),'D1D2D3D4D5D6');services.push(hs,ps);await hs.start();await ps.start();
+    const host=await engine(hs,'host'),player=await engine(ps,'alice','D1D2D3D4D5D6');
+    await vi.waitFor(()=>expect(host.snapshot().connected).toContain('alice'),{timeout:12000});
+    const {blankCharacter,getCharacter,mutateCharacter}=await import('@/lib/characters');
+    const portrait='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=';
+    const {blankPower}=await import('@/lib/powers');const power={...blankPower(),titre:'Existing linked card'};
+    const hero=await host.addRoomHero({...blankCharacter(),nom:'Live hero',portrait,linkedResources:[{type:'power',id:power.id}]},[{type:'power',item:power}]);await host.assignCharacter('alice',hero.id);
+    await vi.waitFor(()=>expect(player.snapshot().session?.characterId).toBe(hero.id));
+    await vi.waitFor(()=>expect((player as any).peers.get('host')?.baseCharacter?.id).toBe(hero.id));
+    await vi.waitFor(()=>expect(host.snapshot().sheetResources.alice).toHaveLength(1),{timeout:12000});
+    const messages:any[]=[];const held:(()=>void)[]=[];let holdPatches=false;
+    for(const [client,id] of [[player,'host'],[host,'alice']] as const){const transport=(client as any).peers.get(id).transport;const original=transport.send.bind(transport);spies.push(vi.spyOn(transport,'send').mockImplementation((message:any)=>{messages.push(message);if(holdPatches&&message.kind==='sheet-patch'){held.push(()=>original(message));return true;}return original(message);}));}
+    const playerChange=async(change:(current:any)=>any)=>{window.removeEventListener('clap-character-saved',(host as any).characterSaved);try{await mutateCharacter(hero.id,change);}finally{window.addEventListener('clap-character-saved',(host as any).characterSaved);}};
+    await playerChange(current=>({...current,stress:current.stress.map((value:boolean,index:number)=>index===1?true:value)}));
+    await vi.waitFor(()=>expect(host.snapshot().sheets.alice.stress[1]).toBe(true),{timeout:2000});
+    await playerChange(current=>({...current,facets:{...current.facets,corps:{...current.facets.corps,core:6,skills:{...current.facets.corps.skills,Force:5}}}}));
+    await vi.waitFor(()=>expect(host.snapshot().sheets.alice.facets.corps.skills.Force).toBe(5),{timeout:2000});
+    await playerChange(current=>({...current,autresAccessoires:[{nom:'Player key',proprietes:'Gold'}]}));
+    await vi.waitFor(()=>expect(host.snapshot().sheets.alice.autresAccessoires[0]?.nom).toBe('Player key'),{timeout:2000});
+    const {roomHeroEditSignature}=await import('@/lib/roomInventoryChanges');
+    const current=host.snapshot().sheets.alice;
+    await host.updateRoomHero({...current,griefs:current.griefs.map((value:boolean,index:number)=>index===2?true:value),facets:{...current.facets,esprit:{...current.facets.esprit,core:7}},autresAccessoires:[...current.autresAccessoires,{nom:'GM item',proprietes:'Silver'}]},current.updatedAt,roomHeroEditSignature(current));
+    await vi.waitFor(async()=>{const received=await getCharacter(hero.id);expect(received?.griefs[2]).toBe(true);expect(received?.facets.esprit.core).toBe(7);expect(received?.autresAccessoires).toHaveLength(2);},{timeout:2000});
+    await vi.waitFor(()=>expect((host as any).peers.get('alice').pendingPatch).toBeUndefined());
+    await vi.waitFor(()=>expect((player as any).peers.get('host').pendingPatch).toBeUndefined());
+    holdPatches=true;
+    await playerChange(current=>({...current,notes:'Player simultaneous note'}));
+    await vi.waitFor(()=>expect((player as any).peers.get('host').pendingPatch?.target.notes).toBe('Player simultaneous note'));
+    const simultaneous=host.snapshot().sheets.alice;
+    await host.updateRoomHero({...simultaneous,notes:'GM simultaneous note'},simultaneous.updatedAt,roomHeroEditSignature(simultaneous));
+    await vi.waitFor(()=>expect(held).toHaveLength(2));holdPatches=false;held.splice(0).forEach(deliver=>deliver());
+    await vi.waitFor(async()=>{expect(host.snapshot().sheets.alice.notes).toBe('GM simultaneous note');expect((await getCharacter(hero.id))?.notes).toBe('GM simultaneous note');expect((host as any).peers.get('alice').pendingPatch).toBeUndefined();expect((player as any).peers.get('host').pendingPatch).toBeUndefined();});
+    const patches=messages.filter(message=>message.kind==='sheet-patch');
+    expect(patches.length).toBeGreaterThanOrEqual(3);
+    expect(patches.some(message=>message.changes.some((change:any)=>change.path.join('.')==='facets.corps.core'))).toBe(true);
+    expect(messages.some(message=>message.kind==='sheet'||message.kind==='assign-sheet')).toBe(false);
+    expect(JSON.stringify(patches)).not.toContain(portrait);
+    expect(messages.some(message=>message.kind==='sheet-resource')).toBe(false);
+  } finally {for(const spy of spies)spy.mockRestore();delete prototype.prioritySupported;delete prototype.deltaSupported;delete prototype.sendPriority;}
+},20000);

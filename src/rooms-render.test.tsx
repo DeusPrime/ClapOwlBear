@@ -125,3 +125,26 @@ it('shows a newly received linked card in the already open hero tab after its no
   await act(async () => { window.dispatchEvent(new CustomEvent('clap-room-character-assigned', { detail: { character: updated } })); window.dispatchEvent(new CustomEvent('clap-room-reward', { detail: { title: power.titre, resource: { type: 'power', item: power }, removed: false } })); });
   await vi.waitFor(async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); }); expect(document.querySelector('[data-tour="hero-linked-resource"]')).not.toBeNull(); });
 });
+it('keeps the player sheet live while editing and merges a remote attribute without losing a local edit', async () => {
+  const {blankCharacter,upsertCharacter,getCharacter}=await import('@/lib/characters');
+  const hero={...blankCharacter(),nom:'Editable hero'};await upsertCharacter(hero);
+  state.value={...state.value,session:{id:'alice',role:'player',name:'Alice',characterId:hero.id}};
+  const {mount}=await import('./App');await act(async()=>{root=mount();});
+  await vi.waitFor(async()=>{await act(async()=>{await new Promise(resolve=>setTimeout(resolve,5));});expect(document.body.textContent).toContain('Editable hero');});
+  const menu=document.querySelector<HTMLButtonElement>('[aria-label="Actions de ma fiche"]')!;
+  await act(async()=>menu.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true,button:0})));
+  const edit=[...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(node=>node.textContent?.includes('Modifier'))!;
+  expect(edit).toBeDefined();await act(async()=>edit.click());
+  const name=[...document.querySelectorAll<HTMLInputElement>('input')].find(input=>input.value==='Editable hero')!;
+  expect(name).toBeDefined();
+  await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(name,'Live renamed hero');name.dispatchEvent(new Event('input',{bubbles:true}));});
+  await vi.waitFor(async()=>expect((await getCharacter(hero.id))?.nom).toBe('Live renamed hero'));
+  const current=(await getCharacter(hero.id))!;
+  const remote={...current,facets:{...current.facets,corps:{...current.facets.corps,skills:{...current.facets.corps.skills,Force:5}}}};
+  await act(async()=>{await upsertCharacter(remote,{roomRemote:true});window.dispatchEvent(new CustomEvent('clap-room-character-assigned',{detail:{character:remote,changes:[{path:['facets','corps','skills','Force'],value:5}]}}));});
+  await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Attributs')!.click());
+  expect([...document.querySelectorAll<HTMLInputElement>('input')].some(input=>input.value==='5')).toBe(true);
+  await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Identité')!.click());
+  expect([...document.querySelectorAll<HTMLInputElement>('input')].some(input=>input.value==='Live renamed hero')).toBe(true);
+  await vi.waitFor(async()=>{const saved=await getCharacter(hero.id);expect(saved?.facets.corps.skills.Force).toBe(5);expect(saved?.nom).toBe('Live renamed hero');});
+});

@@ -1,3 +1,5 @@
+import {roomHeroEditSignature} from '@/lib/roomInventoryChanges';
+import {mutateCharacter} from '@/lib/characters';
 import SheetLoading from '@owlbear/SheetLoading';
 import { localizeText, localizeNode } from '@/i18n/localize';
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -34,6 +36,10 @@ export function PlayerSheet({ member, hero, onClose, initialTab = "identity" }: 
   const permitted = isMJ || own;
   useEffect(() => { let active = true; if (own) void loadLinkedBundledResources(hero).then(resources => { if (active) setLocalResources(resources); }).catch(() => {}); return () => { active = false; }; }, [hero, own]);
   const resources = own ? localResources : room.sheetResources[member.id] || [];
+  const change=(patch:Partial<Character>)=>{setError('');void (isMJ?roomClient.updateRoomHero({...hero,...patch},hero.updatedAt,roomHeroEditSignature(hero)):mutateCharacter(hero.id,current=>({...current,...patch}))).catch(cause=>setError(cause.message));};
+  const level=(values:boolean[],index:number)=>values.map((_,i)=>i<(values[index]?index:index+1));
+  const injury=(loc:string,index:number)=>{const next=level(hero.injuries[loc]||Array(7).fill(false),index);change({injuries:{...hero.injuries,[loc]:next},cardCheckColors:{...hero.cardCheckColors,injuries:{...hero.cardCheckColors.injuries,[loc]:(hero.cardCheckColors.injuries[loc]||Array(7).fill('')).map((color,i)=>next[i]?color:'')}},...(next.lastIndexOf(true)<next.length-1?{criticalStates:{...hero.criticalStates,agony:{...hero.criticalStates.agony,[loc]:false}}}:{})});};
+  const stateLevel=(key:'stress'|'griefs',index:number)=>{const next=level(hero[key],index);change({[key]:next,cardCheckColors:{...hero.cardCheckColors,[key]:hero.cardCheckColors[key].map((color,i)=>next[i]?color:'')},...(next.lastIndexOf(true)<next.length-1?{criticalStates:{...hero.criticalStates,[key==='stress'?'mentalBreak':'emotionalBreak']:false}}:{})});};
   useLayoutEffect(() => {
     const stage = cardStage.current;
     if (!stage) return;
@@ -58,7 +64,14 @@ export function PlayerSheet({ member, hero, onClose, initialTab = "identity" }: 
       </header>
       {isMJ && <div className="flex flex-wrap gap-2 px-4 py-2"><RoomHeroStateEditor hero={hero} /><RoomHeroActions enabled member={member} hero={hero} onRoll={() => setRolling(true)} toolbar><span /></RoomHeroActions></div>}
       <div className="room-sheet-content">
-      {tab !== 'resources' && <div ref={cardStage} className="room-sheet-card-stage"><CharacterCards c={hero} activeCardTab={tab} onToggleSelect={toggle} selectedKeys={new Set(selection.map(item => `${item.facet}::${item.name}`))} canSelectMore={selection.length < 2} /></div>}
+      {tab !== 'resources' && <div ref={cardStage} className="room-sheet-card-stage"><CharacterCards c={hero} activeCardTab={tab}
+        onInjuryChange={injury}
+        onStressChange={index=>stateLevel('stress',index)}
+        onGriefChange={index=>stateLevel('griefs',index)}
+        onNotesChange={notes=>change({notes})}
+        onCheckColorChange={(target,color)=>{if(target.kind==='injury'){const values=[...(hero.cardCheckColors.injuries[target.loc]||Array(7).fill(''))];values[target.index]=color;change({cardCheckColors:{...hero.cardCheckColors,injuries:{...hero.cardCheckColors.injuries,[target.loc]:values}}});}else{const key=target.kind==='stress'?'stress':'griefs';const values=[...hero.cardCheckColors[key]];values[target.index]=color;change({cardCheckColors:{...hero.cardCheckColors,[key]:values}});}}}
+        onCriticalSummaryToggle={kind=>change({criticalStates:{...hero.criticalStates,...(kind==='agony'?{agony:Object.fromEntries(Object.keys(hero.criticalStates.agony).map(loc=>[loc,!Object.values(hero.criticalStates.agony).some(Boolean)]))}:{[kind]:!hero.criticalStates[kind]})}})}
+        onToggleSelect={toggle} selectedKeys={new Set(selection.map(item => `${item.facet}::${item.name}`))} canSelectMore={selection.length < 2} /></div>}
       {tab === 'resources' && <section className="space-y-3 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-display text-2xl">{localizeText("Cartes liées")}</h3>{localizeNode(isMJ && <RoomLibraryPicker label={localizeText("Ajouter une carte liée")} onSelect={async resource => { if (resource.type === "hero") return; await roomClient.linkResource(member.id, resource); toast.success(localizeText("Carte ajoutée à la fiche du joueur.")); }} />)}</div>
         {localizeNode(!hero.linkedResources.length && <p className="text-sm text-muted-foreground">{localizeText("Aucune carte liée à ce héros.")}</p>)}
         <ul className="divide-y divide-ink/15">{hero.linkedResources.map(link => { const resource = resources.find(resource => resource.type === link.type && resource.item.id === link.id); return <li key={`${link.type}:${link.id}`}><button type="button" disabled={!resource} className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left text-sm font-bold underline underline-offset-4 disabled:font-normal disabled:no-underline disabled:opacity-50" onClick={() => { if (resource) setOpenedResource(resource); }}>{resource?.item.titre || "Chargement de la carte…"}</button></li>; })}</ul>

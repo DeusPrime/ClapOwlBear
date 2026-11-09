@@ -404,12 +404,14 @@ export const saveCharacters = async (chars: Character[]) => {
   });
 };
 
-export const upsertCharacter = async (c: Character) => {
+export const upsertCharacter = async (c: Character, options?: { roomRemote?: boolean }) => {
   c = migrateCharacter(c);
   c.updatedAt = Date.now();
   await migrateLocalStorageToIndexedDb();
   await withStore<IDBValidKey>("readwrite", (store) => store.put(c));
-  window.dispatchEvent(new CustomEvent('clap-character-saved', { detail: c }));
+  const event=new CustomEvent('clap-character-saved', { detail: c });
+  if(options?.roomRemote)Object.assign(event,{clapRoomRemote:true});
+  window.dispatchEvent(event);
 };
 
 export const deleteCharacter = async (id: string) => {
@@ -425,3 +427,16 @@ export const getCharacter = async (id: string) => {
   );
   return character ? migrateCharacter(character) : undefined;
 };
+
+/** Atomically merge a room change into the latest local record. */
+export async function mutateCharacter(id:string, mutate:(current:Character)=>Character, options?:{roomRemote?:boolean}) {
+  await migrateLocalStorageToIndexedDb();
+  const db=await openCharactersDb();
+  return new Promise<Character|undefined>((resolve,reject)=>{
+    const tx=db.transaction(STORE_NAME,'readwrite');let result:Character|undefined;
+    const request=tx.objectStore(STORE_NAME).get(id);
+    request.onsuccess=()=>{try{if(request.result){result=migrateCharacter(mutate(migrateCharacter(request.result)));result.updatedAt=Date.now();tx.objectStore(STORE_NAME).put(result);}}catch(error){tx.abort();reject(error);}};
+    tx.oncomplete=()=>{db.close();if(result){const event=new CustomEvent('clap-character-saved',{detail:result});if(options?.roomRemote)Object.assign(event,{clapRoomRemote:true});window.dispatchEvent(event);}resolve(result);};
+    tx.onerror=tx.onabort=()=>{db.close();reject(tx.error||new Error('Character update failed'));};
+  });
+}

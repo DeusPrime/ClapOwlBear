@@ -39,13 +39,14 @@ export function createNativePeerBridge(wire: NativeWire) {
     constructor(readonly peer:NativePeer){}
     send(value:string){if(this.readyState!=='open')throw new Error('Channel closed');this.bufferedAmount+=value.length*2;this.peer.queue.push(value);this.peer.scheduleFlush();}
     get prioritySupported(){return this.peer.prioritySupported;}
+    get deltaSupported(){return this.peer.deltaSupported;}
     sendPriority(value:string){if(this.readyState!=='open'||!this.prioritySupported||value.length>8040||this.peer.control.queue.length>=128)throw new Error('Priority channel unavailable');this.peer.control.queue.push(value);this.peer.scheduleFlush();}
     close(){this.peer.close();}
   }
   class NativePeer {
     id=crypto.randomUUID(); remoteId='';remoteConnection='';key?:CryptoKey;
     keys=crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveKey']);
-    prioritySupported=false;
+    prioritySupported=false;deltaSupported=false;
     bulk={queue:[] as string[],sending:false,sent:0,received:0,pending:undefined as {seq:number;resolve:()=>void;reject:(e:Error)=>void}|undefined,timer:undefined as ReturnType<typeof setTimeout>|undefined,chunks:undefined as {seq:number;count:number;iv:string;parts:Map<number,string>;created:number}|undefined};
     control={...this.bulk,queue:[] as string[]};
     get queue(){return this.bulk.queue;}
@@ -57,7 +58,7 @@ export function createNativePeerBridge(wire: NativeWire) {
     createDataChannel(){return this.channel = new Channel(this);}
     async setLocalDescription(){
       stats.localDescriptions++;const pair=await this.keys;const pub=await crypto.subtle.exportKey('jwk',pair.publicKey);const type=this.remoteDescription?'answer':'offer';
-      const sdp=PREFIX+JSON.stringify({id:this.id,connection:wire.connectionId,pub,priority:true});
+      const sdp=PREFIX+JSON.stringify({id:this.id,connection:wire.connectionId,pub,priority:true,delta:true});
       this.localDescription={type,sdp,toJSON:()=>({type,sdp})};this.signalingState=type==='offer'?'have-local-offer':'stable';
     }
     async setRemoteDescription(description:any){
@@ -67,7 +68,7 @@ export function createNativePeerBridge(wire: NativeWire) {
       if(typeof value.id!=='string'||value.id.length>100||typeof value.connection!=='string'||value.connection.length>100)throw new Error('Invalid peer');
       const pub=await crypto.subtle.importKey('jwk',value.pub,{name:'ECDH',namedCurve:'P-256'},false,[]);
       this.key=await crypto.subtle.deriveKey({name:'ECDH',public:pub},(await this.keys).privateKey,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
-      this.prioritySupported=value.priority===true;
+      this.prioritySupported=value.priority===true;this.deltaSupported=value.delta===true;
       this.remoteId=value.id;this.remoteConnection=value.connection;this.remoteDescription=description;
       if(description.type==='offer'){this.channel=new Channel(this);this.ondatachannel?.({channel:this.channel});}
       else {

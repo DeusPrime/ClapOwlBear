@@ -1,6 +1,6 @@
 import type { Character } from './characters';
 
-export const roomHeroEditFields = (hero: Character) => ({ injuries: hero.injuries, stress: hero.stress, griefs: hero.griefs, notes: hero.notes, armes: hero.armes, armures: hero.armures, autresAccessoires: hero.autresAccessoires });
+export const roomHeroEditFields = (hero: Character) => ({ cardCheckColors:hero.cardCheckColors,facets:hero.facets,criticalStates:hero.criticalStates,pointsRecits:hero.pointsRecits,destinDiceCount:hero.destinDiceCount,supernaturalEnabled:hero.supernaturalEnabled,mandatoryComplication:hero.mandatoryComplication,climaxUsed:hero.climaxUsed,injuries: hero.injuries, stress: hero.stress, griefs: hero.griefs, notes: hero.notes, armes: hero.armes, armures: hero.armures, autresAccessoires: hero.autresAccessoires });
 export function roomHeroEditSignature(hero: Character) {
   const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)])) : value;
   return JSON.stringify(canonical(roomHeroEditFields(hero)));

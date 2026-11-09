@@ -50,7 +50,11 @@ export const publicRollSchema = z.object({
   label: z.string().max(300), summary: z.string().max(1500),
 });
 export type PublicRoll = z.infer<typeof publicRollSchema>;
+const sheetValueSchema=z.object({path:z.array(z.string().max(100)).min(1).max(8),value:z.unknown().optional(),remove:z.boolean().optional()});
 export const roomMessageSchema = z.discriminatedUnion("kind", [
+  z.object({...gameScope,kind:z.literal('sheet-patch'),id:z.string().uuid(),characterId:z.string().max(100),changes:z.array(sheetValueSchema.extend({beforeHash:z.string().regex(/^[a-f0-9]{64}$/)})).min(1).max(500)}),
+  z.object({...gameScope,kind:z.literal('sheet-patch-result'),id:z.string().uuid(),characterId:z.string().max(100),corrections:z.array(sheetValueSchema).max(500),error:z.string().max(250).optional()}),
+  z.object({...gameScope,kind:z.literal('sheet-ready'),id:z.string().uuid(),characterId:z.string().max(100)}),
   z.object({ ...gameScope, kind: z.literal('game-message'), message: chatEntrySchema }),
   z.object({ ...gameScope, kind: z.literal('sheet-summary'), id: z.string().uuid(), characterId: z.string().max(100).nullable(), digest: z.string().regex(/^[a-f0-9]{64}$/).nullable(), resources: z.array(z.object({ key: z.string().max(250), digest: z.string().regex(/^[a-f0-9]{64}$/) })).max(200) }),
   z.object({ ...gameScope, kind: z.literal('sheet-sync'), id: z.string().uuid(), accepted: z.boolean(), needed: z.array(z.string().max(250)).max(200) }),
@@ -75,7 +79,7 @@ export const roomMessageSchema = z.discriminatedUnion("kind", [
   z.object({ ...gameScope, kind: z.literal('sheet-resource'), characterId: z.string().max(100), resource: roomResourceSchema }),
   z.object({ ...gameScope, kind: z.literal("assign-sheet"), assignmentId: z.string().uuid(), character: roomCharacterSchema, resources: z.array(roomResourceSchema).max(200).optional(), project: z.object({ id: z.string().min(1).max(100), title: z.string().trim().min(1).max(80) }).optional() }),
   z.object({ ...gameScope, kind: z.literal("assigned-sheet"), assignmentId: z.string().uuid() }),
-  z.object({ ...gameScope, kind: z.literal("sheet"), character: roomCharacterSchema.nullable() }),
+  z.object({ ...gameScope, kind: z.literal("sheet"), syncId:z.string().uuid().optional(), character: roomCharacterSchema.nullable() }),
 ]);
 export type RoomMessage = z.infer<typeof roomMessageSchema>;
 export type RoomSession = { room: string; id: string; token: string; name: string; role: "mj" | "player"; localRoomId?: string; roomDirectoryId?: string; gameGeneration?: string; retiredGameGenerations?: string[]; receivedAssignment?: string; receivedResourceOps?: string[]; characterId?: string };

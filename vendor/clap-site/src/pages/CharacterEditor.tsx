@@ -1,3 +1,5 @@
+import {roomClient} from '@/lib/roomClient';
+import {applySheetValues,sheetValues,type SheetValue} from '@owlbear/runtime/sheet-patch';
 import PageTour from "@/components/PageTour";
 import OtherAccessoriesEditor from "@/components/OtherAccessoriesEditor";
 import { localizeText, localizeNode } from '@/i18n/localize';
@@ -32,6 +34,7 @@ import {
   STRESS_LEVELS,
   getCharacter,
   upsertCharacter,
+  mutateCharacter,
   characterHasCriticalState,
 } from "@/lib/characters";
 import { downloadBlob, exportCharacterPng } from "@/lib/characterPng";
@@ -2437,6 +2440,7 @@ const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, compactR
       if (onClose) onClose(); else navigate("/characters");
       return;
     }
+    editorSaved.current=structuredClone(ch);
     setC(ch);
     // New / empty character → start in edit mode
     if (!ch.nom) {
@@ -2458,8 +2462,15 @@ const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, compactR
   useEffect(() => {
     const receiveRoomChange = (event: Event) => {
       void refreshHeroResources();
-      const hero = (event as CustomEvent<{ character?: Character }>).detail?.character;
+      const detail=(event as CustomEvent<{ character?: Character;changes?:SheetValue[] }>).detail;
+      const hero = detail?.character;
       if (!hero || hero.id !== id) return;
+      if(detail?.changes){
+        setC(current=>current?.id===hero.id?applySheetValues(current,detail.changes!):current);
+        if(editSnapshotRef.current?.id===hero.id)editSnapshotRef.current=applySheetValues(editSnapshotRef.current,detail.changes);
+        if(editorSaved.current?.id===hero.id)editorSaved.current=applySheetValues(editorSaved.current,detail.changes);
+        return;
+      }
       const patch = { armes: hero.armes, armures: hero.armures, autresAccessoires: hero.autresAccessoires, linkedResources: hero.linkedResources, injuries: hero.injuries, stress: hero.stress, griefs: hero.griefs, notes: hero.notes };
       setC(current => current?.id === hero.id ? { ...current, ...patch } : current);
       if (editSnapshotRef.current?.id === hero.id) editSnapshotRef.current = { ...editSnapshotRef.current, ...patch };
@@ -2556,21 +2567,32 @@ const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, compactR
 
   // Autosave on any change to the character
   const loadedIdRef = useRef<string | null>(null);
+  const editorSaved = useRef<Character | null>(null);
+  const saveCharacter = async (hero:Character) => {
+    const session=roomClient.snapshot().session;
+    if(session?.role==='player' && session.characterId===hero.id && editorSaved.current?.id===hero.id){
+      const changes=sheetValues(editorSaved.current,hero);
+      if(!changes.length&&JSON.stringify(editorSaved.current.portraitEditing)===JSON.stringify(hero.portraitEditing))return;
+      const saved=await mutateCharacter(hero.id,latest=>({...applySheetValues(latest,changes),portraitEditing:hero.portraitEditing}));
+      if(saved){editorSaved.current=saved;const merged=sheetValues(hero,saved);if(merged.length)setC(current=>current?.id===hero.id?applySheetValues(current,merged):current);return;}
+    }
+    await upsertCharacter(hero);editorSaved.current=structuredClone(hero);
+  };
   useEffect(() => {
     if (!c) return;
-    if (mode === "edit") return;
+    if (mode === "edit" && !(roomClient.snapshot().session?.role==='player' && roomClient.snapshot().session?.characterId===c.id)) return;
     if (loadedIdRef.current !== c!.id) {
       loadedIdRef.current = c!.id;
       return; // skip first sync after load
     }
-    const t = setTimeout(() => void upsertCharacter(c).catch(reportSaveError), 200);
+    const t = setTimeout(() => void saveCharacter(c).catch(reportSaveError), 200);
     return () => clearTimeout(t);
   }, [c, mode]);
 
 
   const save = async () => {
     if (!c) return;
-    await upsertCharacter(c);
+    await saveCharacter(c);
     editSnapshotRef.current = structuredClone(c);
     setMode("view");
     if (embedded) window.dispatchEvent(new Event('clap-room-character-assigned'));
@@ -2585,7 +2607,7 @@ const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, compactR
 
   const handleBackToCharacters = async () => {
     if (!c || !isEdit) {
-      if (onClose) { if (c) await upsertCharacter(c); onClose(); } else goBack();
+      if (onClose) { if (c) await saveCharacter(c); onClose(); } else goBack();
       return;
     }
     const snapshot = editSnapshotRef.current;
@@ -2598,7 +2620,7 @@ const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, compactR
       if (!c) return;
       setExportingPng(true);
       try {
-        await upsertCharacter(c);
+        await saveCharacter(c);
         const blob = await exportCharacterPng(c);
         downloadBlob(blob, `${(c!.nom || "personnage").replace(/\s+/g, "_")}.png`);
       } finally {
@@ -2610,7 +2632,7 @@ const CharacterEditor = ({ characterId, onClose, primaryInRoom = false, compactR
   const handleExportA6Pdf = async () => {
     return withExportProgress(async () => {
       if (!c) return;
-      await upsertCharacter(c);
+      await saveCharacter(c);
       setExportingA6Pdf(true);
       try {
         const cards = Array.from(heroCardBoardRef.current?.querySelectorAll<HTMLElement>(".hero-print-card") ?? []);

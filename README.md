@@ -1,4 +1,4 @@
-# CLAP! pour Owlbear Rodeo — 0.2.24
+# CLAP! pour Owlbear Rodeo — 0.2.25
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
@@ -11,6 +11,12 @@ Cette version ajoute `background_url`. Faire recharger le manifeste dans Owlbear
 Chaque participant doit avoir l’extension active dans la salle. Le moteur d’arrière-plan du MJ crée automatiquement la partie, les joueurs la rejoignent avec leurs identités Owlbear distinctes. Aucun identifiant de salle CLAP!, compte du site ou mot de passe supplémentaire à saisir.
 
 La fermeture du panneau ne ferme pas la partie : la page d’arrière-plan conserve la connexion tant que l’onglet Owlbear reste ouvert. Le MJ conserve l’état et les sauvegardes sur son navigateur ; les joueurs disposent de leur propre fiche et de leurs ressources locales.
+
+## Fiches en direct 0.2.25
+
+Les modifications de constantes, attributs, notes et inventaire sont synchronisées en direct dans les deux sens par deltas validés. Le portrait et les champs inchangés ne sont pas retransmis. Les changements sur des champs distincts sont conservés ; en cas de conflit simultané sur le même champ, la valeur du MJ est prioritaire.
+
+Le joueur peut modifier sa fiche depuis le menu de sa fiche. Le MJ peut cliquer sur les constantes de la fiche consultée et utiliser l’éditeur d’attributs, de constantes et d’inventaire. Les changements sont regroupés pendant la saisie et confirmés sans renvoyer la fiche entière. Le transfert complet reste réservé à l’attribution initiale, à une reprise divergente ou aux anciennes versions. Tous les participants doivent recharger la version actuelle.
 
 ## Transferts et reprise 0.2.24
 
