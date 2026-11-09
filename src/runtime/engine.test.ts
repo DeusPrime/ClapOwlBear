@@ -393,3 +393,51 @@ it('synchronizes live constants, attributes and inventory in both directions usi
     expect(messages.some(message=>message.kind==='sheet-resource')).toBe(false);
   } finally {for(const spy of spies)spy.mockRestore();delete prototype.prioritySupported;delete prototype.deltaSupported;delete prototype.sendPriority;}
 },20000);
+it.each(['identical','missing-player-card'] as const)('retains the player cache across a GM restart and a new authentication epoch (%s)',async scenario=>{
+  const prototype=MemoryChannel.prototype as any;
+  Object.defineProperty(prototype,'prioritySupported',{configurable:true,value:true});Object.defineProperty(prototype,'deltaSupported',{configurable:true,value:true});prototype.sendPriority=prototype.send;
+  let wireSpy:ReturnType<typeof vi.spyOn>|undefined;
+  try{
+    vi.stubGlobal('RTCPeerConnection',MemoryPeer);
+    const world=new FakeRodeo();world.add('host','GM');world.add('alice','PLAYER');
+    const code='DAD1DAD2DAD3';
+    const hs=new OwlbearRoomService(world.port('host'),code),ps=new OwlbearRoomService(world.port('alice'),code);services.push(hs,ps);await hs.start();await ps.start();
+    const host=await engine(hs,'host'),player=await engine(ps,'alice',code);
+    await vi.waitFor(()=>expect(host.snapshot().connected).toContain('alice'),{timeout:12000});
+    const {blankCharacter,getCharacter}=await import('@/lib/characters');const {blankPower,deletePower}=await import('@/lib/powers');
+    const power={...blankPower(),directoryId:'source',titre:'Cache retained card'};
+    const hero={...blankCharacter(),directoryId:'source',nom:'GM reconnect hero',linkedResources:[{type:'power',id:power.id}]};
+    const studio=await new JSZip().file('studio.json',JSON.stringify({format:'clap-studio',version:1,project:{id:'source',name:'Reconnect project'},heroes:[hero],resources:[{type:'power',item:power}],tools:[]})).generateAsync({type:'arraybuffer'});
+    await host.importProject(studio);
+    await vi.waitFor(()=>expect(player.snapshot().session?.gameGeneration).toBe(host.snapshot().session?.gameGeneration));
+    const assigned=host.snapshot().roomHeroes[0];await host.assignCharacter('alice',assigned.id);
+    await vi.waitFor(()=>expect(host.snapshot().sheetResources.alice).toHaveLength(1),{timeout:12000});
+    await vi.waitFor(()=>expect(host.pendingAssignmentIds()).toEqual([]));
+    const {rememberPlayerSession,cachedPlayerSheet,rememberedPlayerSession}=await import('./player-session');
+    const oldSession=player.snapshot().session!;const localId=host.snapshot().session!.localRoomId!;
+    rememberPlayerSession(world.port('alice').roomId,'alice',oldSession);
+    host.stop();hs.stop();await (host as any).persistence;
+    world.players=world.players.filter(member=>member.id!=='host');
+    const returning=world.add('host','GM');returning.connectionId='reconnected-gm';
+    const nextService=new OwlbearRoomService(world.port('host'),code);services.push(nextService);await nextService.start();
+    vi.resetModules();const runtime=await import('./client');runtime.configureRuntime({background:true,channel:'reconnected-host'},nextService.api);
+    const {RoomClient}=await import('@/lib/roomClient');const nextHost=new RoomClient();clients.push(nextHost);await nextHost.resumeLocalRoom(localId);
+    await vi.waitFor(()=>expect(player.snapshot().session).toBeNull(),{timeout:10000});
+    const descriptor=await nextService.descriptor();
+    expect(oldSession.token.startsWith(descriptor!.epoch+':')).toBe(false);
+    expect(rememberedPlayerSession(world.port('alice').roomId,'alice',code,'alice',descriptor!.epoch)).toBeUndefined();
+    const cached=cachedPlayerSheet(world.port('alice').roomId,'alice',code,'alice')!;expect(cached.characterId).toBe(assigned.id);
+    if(scenario==='missing-player-card')await deletePower((await getCharacter(assigned.id))!.linkedResources[0].id);
+    const frames:string[]=[];const original=prototype.send;wireSpy=vi.spyOn(prototype,'send').mockImplementation(function(this:any,data:unknown){frames.push(String(data));return original.call(this,data);});prototype.sendPriority=prototype.send;
+    const assignSpy=vi.spyOn(nextHost,'assignCharacter');
+    await player.enter('alice',code,cached.characterId,{cachedSheet:cached});
+    await vi.waitFor(()=>expect(nextHost.snapshot().sheets.alice?.id).toBe(assigned.id),{timeout:12000});
+    expect(player.snapshot().session?.characterId).toBe(assigned.id);
+    expect(player.snapshot().session?.gameGeneration).toBe(nextHost.snapshot().session?.gameGeneration);
+    expect(player.snapshot().session?.token).not.toBe(oldSession.token);
+    await vi.waitFor(async()=>expect(await (await import('@/lib/resourceBundle')).loadLinkedBundledResources((await getCharacter(assigned.id))!)).toHaveLength(1));
+    expect(assignSpy).not.toHaveBeenCalled();
+    expect(frames.some(frame=>frame.includes('"kind":"assign-sheet"')||frame.includes('"kind":"sheet"'))).toBe(false);
+    expect(frames.filter(frame=>frame.includes('"kind":"sheet-resource"'))).toHaveLength(scenario==='missing-player-card'?1:0);
+  }finally{wireSpy?.mockRestore();delete prototype.prioritySupported;delete prototype.deltaSupported;delete prototype.sendPriority;}
+},30000);

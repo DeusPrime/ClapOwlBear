@@ -14,3 +14,13 @@ export function rememberedPlayerSession(room: string, player: string, game: stri
     return value as RoomSession;
   } catch { return; }
 }
+
+export type CachedPlayerSheet = Pick<RoomSession,'characterId'|'gameGeneration'|'roomDirectoryId'>;
+/** A cache hint is never an authentication session. The returning GM verifies its hashes and ownership. */
+export function cachedPlayerSheet(room:string, player:string, game:string, memberId:string): CachedPlayerSheet | undefined {
+  try {
+    const value=JSON.parse(localStorage.getItem(key(room,player))||'null');
+    if(!value||value.role!=='player'||value.room!==game||value.id!==memberId||typeof value.characterId!=='string'||!value.characterId||value.characterId.length>100)return;
+    return {characterId:value.characterId,...(typeof value.gameGeneration==='string'&&value.gameGeneration.length<=100?{gameGeneration:value.gameGeneration}:{}),...(typeof value.roomDirectoryId==='string'&&value.roomDirectoryId.length<=100?{roomDirectoryId:value.roomDirectoryId}:{})};
+  } catch {return;}
+}

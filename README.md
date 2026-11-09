@@ -1,4 +1,4 @@
-# CLAP! pour Owlbear Rodeo — 0.2.25
+# CLAP! pour Owlbear Rodeo — 0.2.26
 
 Extension installée par manifeste et utilisée dans la salle Owlbear. Le moteur, les fiches et les outils de CLAP! proviennent du site, via une copie versionnée dans `vendor/clap-site`.
 
@@ -11,6 +11,10 @@ Cette version ajoute `background_url`. Faire recharger le manifeste dans Owlbear
 Chaque participant doit avoir l’extension active dans la salle. Le moteur d’arrière-plan du MJ crée automatiquement la partie, les joueurs la rejoignent avec leurs identités Owlbear distinctes. Aucun identifiant de salle CLAP!, compte du site ou mot de passe supplémentaire à saisir.
 
 La fermeture du panneau ne ferme pas la partie : la page d’arrière-plan conserve la connexion tant que l’onglet Owlbear reste ouvert. Le MJ conserve l’état et les sauvegardes sur son navigateur ; les joueurs disposent de leur propre fiche et de leurs ressources locales.
+
+## Reconnexion du MJ 0.2.26
+
+Le renouvellement de la session après une déconnexion du MJ conserve la référence au cache du joueur et à la même partie sauvegardée. Le joueur se reconnecte avec un nouvel accès, puis le MJ vérifie les empreintes de sa fiche et de ses cartes. Aucune donnée identique n’est renvoyée ; une carte manquante est restaurée seule. Les jetons expirés ne sont jamais réutilisés pour authentifier le joueur.
 
 ## Fiches en direct 0.2.25
 

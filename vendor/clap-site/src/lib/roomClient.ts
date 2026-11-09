@@ -393,7 +393,7 @@ export class RoomClient {
     } finally { this.busy = false; }
   }
   async rejoin(room: string) { await this.enter('', room, undefined, { resumeOnly: true }); }
-  async enter(name: string, room?: string, characterId?: string, options: { title?: string; password?: string; localRoomId?: string; resumeOnly?: boolean } = {}) {
+  async enter(name: string, room?: string, characterId?: string, options: { title?: string; password?: string; localRoomId?: string; resumeOnly?: boolean; cachedSheet?: {characterId?:string;gameGeneration?:string;roomDirectoryId?:string} } = {}) {
     if (this.busy || this.state.session) throw new Error("Quitte d’abord la salle actuelle.");
     if (typeof RTCPeerConnection === "undefined") throw new Error("Ce navigateur ne prend pas en charge les salles WebRTC.");
     this.busy = true;
@@ -420,7 +420,8 @@ export class RoomClient {
         sender: message.sender === archive.hostId ? session.id : message.sender,
         privateTo: message.privateTo === archive.hostId ? session.id : message.privateTo })) };
       this.update({ exitNotice: undefined, owlbearUrl: archive?.owlbearUrl, projectName: archive?.projectName, roomInfo: { title: archive?.title || options.title || '', locked: Boolean(options.password) }, privateRefs: archive?.privateRefs || [], savedSheets: archive?.sheets || {}, savedSheetResources: archive?.sheetResources || {}, messages: [], requests: [], sheets: {}, sheetResources: {} });
-      this.save({ ...session, characterId, gameGeneration: archive?.gameGeneration, ...(archive ? { localRoomId: archive.id } : {}) });
+      const cached=session.role==='player'&&options.cachedSheet?.characterId===characterId?options.cachedSheet:undefined;
+      this.save({ ...session, characterId, gameGeneration: archive?.gameGeneration||cached?.gameGeneration, ...(cached?.roomDirectoryId?{roomDirectoryId:cached.roomDirectoryId}:{}), ...(archive ? { localRoomId: archive.id } : {}) });
       if (archive) rememberRoomSettings(archive.id, options.password);
       this.publishGame();
       this.start();

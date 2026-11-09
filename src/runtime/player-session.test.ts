@@ -30,3 +30,15 @@ it('replaces an old hero binding with a cleared session after a project reset', 
   rememberPlayerSession('owl-room', 'alice', { ...session, characterId: undefined, gameGeneration: 'new-game' });
   expect(rememberedPlayerSession('owl-room', 'alice', session.room, 'alice', 'epoch')).toBeUndefined();
 });
+it('keeps only a data-cache hint across a changed GM epoch, never the expired token', async () => {
+  const {cachedPlayerSheet}=await import('./player-session');
+  rememberPlayerSession('owl-room','alice',{...session,gameGeneration:'same-game',roomDirectoryId:'local-project',retiredGameGenerations:['previous-game']});
+  expect(rememberedPlayerSession('owl-room','alice',session.room,'alice','new-epoch')).toBeUndefined();
+  const cached=cachedPlayerSheet('owl-room','alice',session.room,'alice');
+  expect(cached).toEqual({characterId:'hero',gameGeneration:'same-game',roomDirectoryId:'local-project'});
+  expect(cached).not.toHaveProperty('token');expect(cached).not.toHaveProperty('role');expect(cached).not.toHaveProperty('retiredGameGenerations');
+  expect(cachedPlayerSheet('owl-room','bob',session.room,'alice')).toBeUndefined();
+  expect(cachedPlayerSheet('owl-room','alice','OTHER','alice')).toBeUndefined();
+  rememberPlayerSession('owl-room','alice',{...session,characterId:undefined,gameGeneration:'new-game'});
+  expect(cachedPlayerSheet('owl-room','alice',session.room,'alice')).toBeUndefined();
+});

@@ -1,7 +1,7 @@
 declare const __APP_VERSION__: string;
 import { createNativePeerBridge } from "./runtime/native-peer";
 import { createNativeRollToasts } from "./runtime/native-roll-toasts";
-import { rememberPlayerSession, rememberedPlayerSession } from "./runtime/player-session";
+import { rememberPlayerSession, rememberedPlayerSession, cachedPlayerSheet } from "./runtime/player-session";
 import { watchPublicRolls } from "./runtime/roll-notifications";
 import OBR from "@owlbear-rodeo/sdk";
 import { configureRuntime, serveRoomClient, configurePeerFactory } from "./runtime/client";
@@ -116,7 +116,9 @@ async function start() {
       } else {
         const descriptor = await service.descriptor();
         if (!descriptor || descriptor.closed) return;
-        await roomClient.enter((await port.self()).name, code);
+        const cached=cachedPlayerSheet(port.roomId,self.id,code,self.id);
+        const exists=cached?.characterId&&await (await import('@/lib/characters')).getCharacter(cached.characterId);
+        await roomClient.enter((await port.self()).name, code, exists?cached!.characterId:undefined, exists?{cachedSheet:cached}:{});
       }
       if (roomClient.snapshot().session?.role === 'mj' && !roomClient.snapshot().owlbearUrl && document.referrer) {
         try {
